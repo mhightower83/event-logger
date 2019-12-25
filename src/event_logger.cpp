@@ -26,7 +26,7 @@
 #include "user_interface.h"
 // #include <pgmspace.h>
 #include <umm_malloc/umm_malloc_cfg.h>
-#include "event_logger.h"
+#include <evlog/src/event_logger.h>
 
 #ifdef ENABLE_EVLOG
 

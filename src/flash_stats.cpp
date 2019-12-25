@@ -23,10 +23,10 @@
 #include "user_interface.h"
 #include <pgmspace.h>
 
-#include "flash_stats.h"
+#include <evlog/src/flash_stats.h>
 #if ENABLE_FLASH_STATS
 
-#include "event_logger.h"
+#include <evlog/src/event_logger.h>
 
 extern "C" {
 
