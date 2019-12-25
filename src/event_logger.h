@@ -13,124 +13,150 @@
  *   See the License for the specific language governing permissions and
  *   limitations under the License.
  */
+ //
+ // A simple memory event logger. Logs a const string and 32 bit data value.
+ //
 #ifndef EVENT_LOGGER_H
 #define EVENT_LOGGER_H
 
-#define ENABLE_EVENTLOG
-#ifdef ENABLE_EVENTLOG
+#define ENABLE_EVLOG
+#ifdef ENABLE_EVLOG
+#define EVLOG_WITH_DRAM 1
+
+/*
+  Time stamp options
+
+  EVLOG_TIMESTAMP_CLOCKCYCLES - lowest over head least intrusive to get. Safe
+  call in every context or just about. Good option for when paranoid.
+
+  EVLOG_TIMESTAMP_MICROS - next in line. Handle up to an hour before wrapping.
+  No experiance at this time.
+
+  EVLOG_TIMESTAMP_MILLIS - last in line. Can go for 49 days before wrapping.
+  More code is excuted to get time - unsure of general safety at this time.
+  May not be good for time critial logging. No experiance at this time.
+*/
+#define EVLOG_TIMESTAMP_CLOCKCYCLES   (80000000U) // Wraps at 53.687091 secs. w/80 Mhz CPU clock
+#define EVLOG_TIMESTAMP_MICROS        (1000000U)  // Wraps at 1:11:34.967295
+#define EVLOG_TIMESTAMP_MILLIS        (1000U)     // Wraps at 49D 17:02:47.295
+
+// Selected Timestamp option from above
+#define EVLOG_TIMESTAMP     EVLOG_TIMESTAMP_MICROS
+// #undef EVLOG_TIMESTAMP
 
 #ifdef __cplusplus
 extern "C" {
 #endif
-//
-// A simple memory event logger log a const string and 32 bit data value.
-//
-
-// // Start event log after OTA Data - this leaves 96 words
-// #ifndef RTC_LOG
-// #if 1
-// #define RTC_LOG ((volatile uint32_t*)umm_static_reserve_addr)
-// #define RTC_LOG_SZ (umm_static_reserve_size/sizeof(uint32_t) - 2U)
-// #else
-// #define RTC_LOG ((volatile uint32_t*)0x60001280U)
-// #define RTC_LOG_SZ ((uint32_t)128 - 32U - 2U)
-// #endif
-// #endif
-//
-// typedef struct _EVENT_LOG_ENTRY {
-//     const char *str;
-//     uint32_t data;
-// } event_log_entry_t;
-//
-// #ifndef MAX_LOG_EVENTS
-// #define MAX_LOG_EVENTS (RTC_LOG_SZ/(sizeof(event_log_entry_t)/sizeof(uint32_t))) //(47)
-// #endif
-//
-// typedef struct _EVENT_LOG {
-//     uint32_t num;
-//     uint32_t state;
-//     event_log_entry_t event[MAX_LOG_EVENTS];
-// } event_log_t;
-//
-// #define EVENTLOG_NOZERO_COOKIE (0x5A5A0000U)
-// #define EVENTLOG_ENABLE_MASK (0x0FFU)
-// #define EVENTLOG_INIT_MASK (0x0FFU<<8)
-// #define EVENTLOG_COOKIE_MASK (~EVENTLOG_ENABLE_MASK)
-// #if 1
-// static_assert((sizeof(event_log_t) <= umm_static_reserve_size), "MAX_LOG_EVENTS too large exceeds static reserve size.");
-// #else
-// static_assert((sizeof(event_log_t) + ((uint32_t)RTC_LOG - 0x60001200U) <= 512U), "MAX_LOG_EVENTS too large. Total RTC Memory usage exceeds 512.");
-// #endif
 
 
 #define EVENTLOG_NOZERO_COOKIE (0x5A5A0000U)
 #define EVENTLOG_ENABLE_MASK (0x0FFU)
 #define EVENTLOG_INIT_MASK (0x0FFU<<8)
 #define EVENTLOG_COOKIE_MASK (~EVENTLOG_ENABLE_MASK)
+#define EVLOG_ARG4 4
+#define EVLOG_ARGS_MAX ((size_t)EVLOG_ARG4 - 1U)
 
-void eventlog_init(bool force);
-bool eventlog_is_enable(void);
-uint32_t eventlog_set_state(uint32_t enable);
-uint32_t eventlog_get_state(void);
-uint32_t eventlog_get_count(void);
-uint32_t eventlog_log_event(const char *str, uint32_t data);
-// const char *eventlog_get_event(uint32_t num, uint32_t *data);
-bool eventlog_get_event(const char **pStr, uint32_t *data, bool first);
-void eventlog_restart(uint32_t state);
+typedef struct _EVENT_LOG_ENTRY {
+    const char *fmt;
+    uint32_t data[EVLOG_ARGS_MAX];
+#if (EVLOG_TIMESTAMP == EVLOG_TIMESTAMP_CLOCKCYCLES) || (EVLOG_TIMESTAMP == EVLOG_TIMESTAMP_MICROS) || (EVLOG_TIMESTAMP == EVLOG_TIMESTAMP_MILLIS)
+    uint32_t ts;
+#endif
+} evlog_entry_t;
+
+void evlog_init(bool force);
+bool evlog_is_enable(void);
+uint32_t evlog_set_state(uint32_t enable);
+uint32_t evlog_get_state(void);
+uint32_t evlog_get_count(void);
+void evlog_restart(uint32_t state);
+
+#if (EVLOG_ARG4 == 4)
+uint32_t evlog_event4(const char *fmt, uint32_t data0, uint32_t data1, uint32_t data2);
+uint32_t evlog_event2(const char *fmt, uint32_t data);
+// inline __attribute__((__always_inline__))
+// uint32_t evlog_event2(const char *fmt, uint32_t data) {
+//   return evlog_event4(fmt, data, 0, 0);
+// }
+
+#else
+uint32_t evlog_event2(const char *fmt, uint32_t data);
+
+inline __attribute__((__always_inline__))
+uint32_t evlog_event4(const char *fmt, uint32_t data0, uint32_t data1, uint32_t data2) {
+  (void)data1;
+  (void)data2;
+  return evlog_event2(fmt, data0);
+}
+#endif
+
+bool evlog_get_event(evlog_entry_t *entry, bool first);
 
 #ifdef __cplusplus
 };
 #endif
 
 #ifdef Print_h
-void print_eventlog(Print& out);
+void evlog_print_report(Print& out);
 #endif
 
-#ifndef _EVENT_LOG
-#define _EVENT_LOG_P(str, val) eventlog_log_event(str, (uint32_t)val)
-#define _EVENT_LOG(str, val) EVENT_LOG_P(PSTR(str), val)
-#endif
-#ifndef EVENT_LOG
-#define EVENT_LOG_P(str, val) _EVENT_LOG_P(str,val)
-#define EVENT_LOG(str, val) _EVENT_LOG(str, val)
-#endif
-#ifndef EVENT_LOG2
-#define EVENT_LOG2_P(str, val) _EVENT_LOG_P(str,val)
-#define EVENT_LOG2(str, val) _EVENT_LOG(str, val)
-#endif
-#ifndef EVENT_LOG3
-#define EVENT_LOG3_P(str, val) _EVENT_LOG_P(str,val)
-#define EVENT_LOG3(str, val) _EVENT_LOG(str, val)
-#endif
+#define EVLOG4_P(fmt, val0, val1, val2) evlog_event4((fmt), (uint32_t)(val0), (uint32_t)(val1), (uint32_t)(val2))
+#define EVLOG4(fmt, val0, val1, val2)  EVLOG4_P(PSTR(fmt), (val0), (val1), (val2))
 
-#else // ! ENABLE_EVENTLOG
-#ifndef eventlog_init
-#define eventlog_init(a) do{}while(false)
+#define EVLOG3_P(fmt, val0, val1) EVLOG4_P((fmt), (val0), (val1), 0)
+#define EVLOG3(fmt, val0, val1)  EVLOG4_P(PSTR(fmt), (val0), (val1), 0)
+
+// #define EVLOG2_P(fmt, val0) EVLOG3_P((fmt), (val0), 0)
+// #define EVLOG2(fmt, val0) EVLOG2_P(PSTR(fmt), (val0))
+
+#define EVLOG2_P(fmt, val0) EVLOG4_P((fmt), (val0), 0, 0)
+#define EVLOG2(fmt, val0) EVLOG4_P(PSTR(fmt), (val0), 0, 0)
+
+#define EVLOG1_P(fmt) EVLOG2_P(fmt, 0)
+#define EVLOG1(fmt) EVLOG1_P(PSTR(fmt))
+
+#else // ! ENABLE_EVLOG
+#ifndef evlog_init
+#define evlog_init(a) do{}while(false)
 #endif
-#ifndef eventlog_restart
-#define eventlog_restart(state) do{}while(false)
+#ifndef evlog_restart
+#define evlog_restart(state) do{}while(false)
 #endif
 #ifdef Print_h
-#ifndef print_eventlog
-#define print_eventlog(out)  do{}while(false)
+#ifndef evlog_print_report
+#define evlog_print_report(out)  do{}while(false)
 #endif
 #endif
-#ifndef _EVENT_LOG
-#define _EVENT_LOG_P(str, val) do{}while(false)
-#define _EVENT_LOG(str, val) do{}while(false)
+#ifndef EVLOG4
+#define EVLOG4_P(fmt, val0, val1, val2) do{}while(false)
+#define EVLOG4(fmt, val0, val1, val2) do{}while(false)
 #endif
-#ifndef EVENT_LOG
-#define EVENT_LOG_P(str, val) _EVENT_LOG_P(str,val)
-#define EVENT_LOG(str, val) _EVENT_LOG(str, val)
+#ifndef EVLOG3
+#define EVLOG3_P(fmt, val0, val1) do{}while(false)
+#define EVLOG3(fmt, val0, val1) do{}while(false)
 #endif
-#ifndef EVENT_LOG2
-#define EVENT_LOG2_P(str, val) _EVENT_LOG_P(str,val)
-#define EVENT_LOG2(str, val) _EVENT_LOG(str, val)
+#ifndef EVLOG2
+#define EVLOG2_P(fmt, val) do{}while(false)
+#define EVLOG2(fmt, val) do{}while(false)
 #endif
-#ifndef EVENT_LOG3
-#define EVENT_LOG3_P(str, val) _EVENT_LOG_P(str,val)
-#define EVENT_LOG3(str, val) _EVENT_LOG(str, val)
+#ifndef EVLOG1
+#define EVLOG1_P(fmt) do{}while(false)
+#define EVLOG1(fmt) do{}while(false)
 #endif
-#endif  // ENABLE_EVENTLOG
+#endif  // ENABLE_EVLOG
 
-#endif
+// #ifndef EVLOG2
+// #define EVLOG2_P(fmt, val) _EVLOG2_P(fmt,val)
+// #define EVLOG2(fmt, val) _EVLOG2(fmt, val)
+// #endif
+// #ifndef EVLOG22
+// #define EVLOG22_P(fmt, val) _EVLOG2_P(fmt,val)
+// #define EVLOG22(fmt, val) _EVLOG2(fmt, val)
+// #endif
+// #ifndef EVLOG23
+// #define EVLOG23_P(fmt, val) _EVLOG2_P(fmt,val)
+// #define EVLOG23(fmt, val) _EVLOG2(fmt, val)
+// #endif
+
+
+#endif // EVENT_LOGGER_H

@@ -13,7 +13,6 @@
  *   See the License for the specific language governing permissions and
  *   limitations under the License.
  */
- 
 #ifndef FLASH_STATS_H
 #define FLASH_STATS_H
 
@@ -36,17 +35,21 @@ typedef struct ESP_FLASH_DATA {
 } esp_flash_data_t;
 
 typedef struct ESP_FLASH_LOG {
-  const char *init_by;
+  // const char *init_by;
+  // volatile uint32_t *ptr_chip_size;
+  bool one_shot;
+  uint32_t chip_size;
   esp_flash_data_t match;
   esp_flash_data_t r_count;
   esp_flash_data_t w_count;
   uint32_t address;
-  uint32_t flash_size;
 } esp_flash_log_t;
 
+// constexpr uint32_t ESP_FLASH_STATS_COOKIE 0x055AAAA55;
 extern esp_flash_log_t esp_flash_log;
 
-void ICACHE_RAM_ATTR init_flash_stats(const char *init_by, bool write);
+void ICACHE_RAM_ATTR init_flash_stats(void);
+// void ICACHE_RAM_ATTR init_flash_stats(const char *init_by, bool write);
 // void ICACHE_RAM_ATTR flash_addr_match_stats(uint32_t addr, uint32_t size, bool write, int err);
 void ICACHE_RAM_ATTR update_spoof_init_data_flag(const bool value);
 void ICACHE_RAM_ATTR preinit_flash_stats(void);

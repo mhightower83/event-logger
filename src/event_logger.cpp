@@ -16,6 +16,7 @@
 //
 // A simple memory event logger log a const string and 32 bit data value.
 //
+#include <Arduino.h>
 #include <stdint.h>
 #include <stddef.h>
 #include <stdbool.h>
@@ -27,104 +28,101 @@
 #include <umm_malloc/umm_malloc_cfg.h>
 #include "event_logger.h"
 
-#ifndef DISABLE_EVENTLOG
+#ifdef ENABLE_EVLOG
 
 extern "C" {
+// Need when used from ISR etc context. Comment out otherwise.
 #define IRAM_OPTION ICACHE_RAM_ATTR
 
 // Start event log after OTA Data - this leaves 96 words
-#ifndef RTC_LOG
-#if 1
-#define RTC_LOG ((volatile uint32_t*)umm_static_reserve_addr)
-#define RTC_LOG_SZ (umm_static_reserve_size/sizeof(uint32_t) - 2U)
+#ifdef EVLOG_WITH_DRAM
+#define EVLOG_ADDR_QUALIFIER
+#define EVLOG_ADDR ((EVLOG_ADDR_QUALIFIER uint32_t*)umm_static_reserve_addr)
+#define EVLOG_ADDR_SZ (umm_static_reserve_size/sizeof(uint32_t) - 2U)
+
 #else
-#define RTC_LOG ((volatile uint32_t*)0x60001280U)
-#define RTC_LOG_SZ ((uint32_t)128 - 32U - 2U)
-#endif
+#define EVLOG_RTC_MEMORY 1
+#define EVLOG_ADDR_QUALIFIER volatile
+#define EVLOG_ADDR ((EVLOG_ADDR_QUALIFIER uint32_t*)0x60001280U)
+#define EVLOG_ADDR_SZ ((uint32_t)128 - 32U - 2U)  // USER_RTC - EBOOT - sizeof(num and state)
 #endif
 
-typedef struct _EVENT_LOG_ENTRY {
-    const char *str;
-    uint32_t data;
-} event_log_entry_t;
-
-#ifndef MAX_LOG_EVENTS
-#define MAX_LOG_EVENTS (RTC_LOG_SZ/(sizeof(event_log_entry_t)/sizeof(uint32_t))) //(47)
+#ifndef MAX_EVENTS
+#define MAX_EVENTS (EVLOG_ADDR_SZ/(sizeof(evlog_entry_t)/sizeof(uint32_t))) //(47)
 #endif
 
 typedef struct _EVENT_LOG {
     uint32_t num;
     uint32_t state;
-    event_log_entry_t event[MAX_LOG_EVENTS];
-} event_log_t;
+    evlog_entry_t event[MAX_EVENTS];
+} evlog_t;
 
-#if 1
-static_assert((sizeof(event_log_t) <= umm_static_reserve_size), "MAX_LOG_EVENTS too large exceeds static reserve size.");
+#ifdef EVLOG_WITH_DRAM
+static_assert((sizeof(evlog_t) <= umm_static_reserve_size), "MAX_EVENTS too large exceeds static reserve size.");
 #else
-static_assert((sizeof(event_log_t) + ((uint32_t)RTC_LOG - 0x60001200U) <= 512U), "MAX_LOG_EVENTS too large. Total RTC Memory usage exceeds 512.");
+static_assert((sizeof(evlog_t) + ((uint32_t)EVLOG_ADDR - 0x60001200U) <= 512U), "MAX_EVENTS too large. Total RTC Memory usage exceeds 512.");
 #endif
 
 
-static event_log_t volatile * p_event_log __attribute__((section(".noinit")));;
+static evlog_t EVLOG_ADDR_QUALIFIER * p_evlog __attribute__((section(".noinit")));;
 
-inline void IRAM_OPTION eventlog_clear_log(void) {
-     for (size_t i=0; i<(sizeof(event_log_t)/sizeof(int32_t)); i++)
-         RTC_LOG[i]=0;
+inline void IRAM_OPTION evlog_clear_log(void) {
+     for (size_t i=0; i<(sizeof(evlog_t)/sizeof(int32_t)); i++)
+         EVLOG_ADDR[i]=0;
 }
 
 inline bool IRAM_OPTION is_inited(void) {
-  return ((event_log_t volatile *)RTC_LOG == p_event_log);
+  // return ((evlog_t EVLOG_ADDR_QUALIFIER *)EVLOG_ADDR == p_evlog);
+  return ((uint32_t)EVLOG_ADDR == (uint32_t)p_evlog);
 }
 
-uint32_t IRAM_OPTION eventlog_get_state(void) {
+uint32_t IRAM_OPTION evlog_get_state(void) {
     if (is_inited())
-        return p_event_log->state;
+        return p_evlog->state;
 
     return 0;
 }
 
-uint32_t IRAM_OPTION eventlog_set_state(uint32_t state) {
-    uint32_t previous = eventlog_get_state();
-    p_event_log->state = state;
+uint32_t IRAM_OPTION evlog_set_state(uint32_t state) {
+    uint32_t previous = evlog_get_state();
+    p_evlog->state = state;
     return previous;
 }
 
-void IRAM_OPTION eventlog_init(bool force) {
+void IRAM_OPTION evlog_init(bool force) {
     if (!force && is_inited())
         return;
 
-    uint32_t dirty_value = (uint32_t)p_event_log;
-    p_event_log = (event_log_t volatile *)RTC_LOG;
+    uint32_t dirty_value = (uint32_t)p_evlog;
+    p_evlog = (evlog_t EVLOG_ADDR_QUALIFIER *)EVLOG_ADDR;
 
     // We are called early at boot time. When cookie is set don't zero RTC memory
-    if ((p_event_log->state & EVENTLOG_COOKIE_MASK) == EVENTLOG_NOZERO_COOKIE) {
-        eventlog_log_event(PSTR("*** EventLog Resumed ***"), dirty_value);
+    if ((p_evlog->state & EVENTLOG_COOKIE_MASK) == EVENTLOG_NOZERO_COOKIE) {
+        EVLOG2("*** EventLog Resumed *** 0x%08X", dirty_value);
         return;
     }
 
-    eventlog_clear_log();
+    evlog_clear_log();
     // Auto enable on init, comment out as the need arises.
-    eventlog_set_state(1);
-    eventlog_log_event(PSTR("*** EventLog Started ***"), dirty_value);
+    evlog_set_state(1);
+    EVLOG2("*** EventLog Started *** 0x%08", dirty_value);
 }
 
-// eventlog_restart(EVENTLOG_NOZERO_COOKIE | 1);
+// evlog_restart(EVENTLOG_NOZERO_COOKIE | 1);
 
-void IRAM_OPTION eventlog_restart(uint32_t state) {
+void IRAM_OPTION evlog_restart(uint32_t state) {
     if (is_inited()) {
-        eventlog_clear_log();
-        eventlog_set_state(state);
-        eventlog_log_event(PSTR("*** EventLog Restarted ***"), 0);
+        evlog_clear_log();
+        evlog_set_state(state);
+        EVLOG1("*** EventLog Restarted ***");
     } else {
-        eventlog_init(false);
+        evlog_init(false);
     }
 }
 
-bool IRAM_OPTION eventlog_is_enable(void) {
+bool IRAM_OPTION evlog_is_enable(void) {
     if (is_inited()) {
-        uint32_t state = eventlog_get_state();
-        // if (!(EVENTLOG_INIT_MASK & state))
-        //     return false;
+        uint32_t state = evlog_get_state();
         state &= EVENTLOG_ENABLE_MASK;
         return (0 == state) ? false : true;
     }
@@ -133,50 +131,117 @@ bool IRAM_OPTION eventlog_is_enable(void) {
 }
 
 #ifdef EVENTLOG_CIRCULAR
-uint32_t IRAM_OPTION eventlog_log_event(const char *str, uint32_t data) {
-    eventlog_init(false);
-    if (eventlog_is_enable()) {
-        uint32_t num = p_event_log->num;
-        if (num >= MAX_LOG_EVENTS)
+#if (EVLOG_ARG4 == 4)
+uint32_t IRAM_OPTION evlog_event4(const char *fmt, uint32_t data0, uint32_t data1, uint32_t data2) {
+  evlog_init(false);
+
+  if (evlog_is_enable()) {
+      uint32_t num = p_evlog->num;
+      if (num >= MAX_EVENTS)
+          num = 0;
+
+      p_evlog->event[num].fmt = fmt;
+      p_evlog->event[num].data[0] = data0;
+      p_evlog->event[num].data[1] = data1;
+      p_evlog->event[num].data[2] = data2;
+#if (EVLOG_TIMESTAMP == EVLOG_TIMESTAMP_CLOCKCYCLES)
+      p_evlog->event[num].ts = esp_get_cycle_count();
+#elif (EVLOG_TIMESTAMP == EVLOG_TIMESTAMP_MICROS)
+      p_evlog->event[num].ts = micros();
+#elif (EVLOG_TIMESTAMP == EVLOG_TIMESTAMP_MILLIS)
+      p_evlog->event[num].ts = millis();
+#endif
+
+      p_evlog->num = ++num;
+
+      return num;
+    }
+
+    return 0;
+}
+
+#else
+uint32_t IRAM_OPTION evlog_event2(const char *fmt, uint32_t data0) {
+    evlog_init(false);
+
+    if (evlog_is_enable()) {
+        uint32_t num = p_evlog->num;
+        if (num >= MAX_EVENTS)
             num = 0;
 
-        p_event_log->event[num].str = str;
-        p_event_log->event[num].data = data;
-        p_event_log->num = ++num;
+        p_evlog->event[num].fmt = fmt;
+        p_evlog->event[num].data[0] = data0;
+        p_evlog->num = ++num;
 
         return num;
     }
 
     return 0;
 }
-#else // Linear log and stop
-uint32_t IRAM_OPTION eventlog_log_event(const char *str, uint32_t data) {
-    eventlog_init(false);
+#endif
 
-    if (eventlog_is_enable()) {
-        uint32_t num = p_event_log->num;
-        if (num < MAX_LOG_EVENTS) {
-            p_event_log->event[num].str = str;
-            p_event_log->event[num].data = data;
-            p_event_log->num = ++num;
+#else // Linear log and stop
+#if (EVLOG_ARG4 == 4)
+uint32_t IRAM_OPTION evlog_event4(const char *fmt, uint32_t data0, uint32_t data1, uint32_t data2) {
+    evlog_init(false);
+
+    if (evlog_is_enable()) {
+        uint32_t num = p_evlog->num;
+        if (num < MAX_EVENTS) {
+            p_evlog->event[num].fmt = fmt;
+            p_evlog->event[num].data[0] = data0;
+            p_evlog->event[num].data[1] = data1;
+            p_evlog->event[num].data[2] = data2;
+#if (EVLOG_TIMESTAMP == EVLOG_TIMESTAMP_CLOCKCYCLES)
+            p_evlog->event[num].ts = esp_get_cycle_count();
+#elif (EVLOG_TIMESTAMP == EVLOG_TIMESTAMP_MICROS)
+            p_evlog->event[num].ts = micros();
+#elif (EVLOG_TIMESTAMP == EVLOG_TIMESTAMP_MILLIS)
+            p_evlog->event[num].ts = millis();
+#endif
+            p_evlog->num = ++num;
             return num;
         } else {
-            p_event_log->state &= ~EVENTLOG_ENABLE_MASK;
+            p_evlog->state &= ~EVENTLOG_ENABLE_MASK;
+        }
+    }
+
+    return 0;
+}
+
+uint32_t IRAM_OPTION evlog_event2(const char *fmt, uint32_t data) {
+  return evlog_event4(fmt, data, 0, 0);
+}
+
+#else
+uint32_t IRAM_OPTION evlog_event2(const char *fmt, uint32_t data) {
+    evlog_init(false);
+
+    if (evlog_is_enable()) {
+        uint32_t num = p_evlog->num;
+        if (num < MAX_EVENTS) {
+            p_evlog->event[num].fmt = fmt;
+            p_evlog->event[num].data[0] = data;
+            p_evlog->num = ++num;
+            return num;
+        } else {
+            p_evlog->state &= ~EVENTLOG_ENABLE_MASK;
         }
     }
 
     return 0;
 }
 #endif
+#endif
 
-uint32_t eventlog_get_count(void) {
+uint32_t evlog_get_count(void) {
     if (is_inited())
-        return p_event_log->num;
+        return p_evlog->num;
 
     return 0U;
 }
 
-bool eventlog_get_event(const char **pStr, uint32_t *data, bool first) {
+bool evlog_get_event(evlog_entry_t *entry, bool first) {
     static struct {
         uint32_t next;
         uint32_t start;
@@ -187,31 +252,28 @@ bool eventlog_get_event(const char **pStr, uint32_t *data, bool first) {
 
 #ifdef EVENTLOG_CIRCULAR
     if (first) {
-        event.start = event.next = eventlog_get_count();
+        event.start = event.next = evlog_get_count();
         event.next++;
     } else
     if (0 == event.next)
         return false;
 
-    if (MAX_LOG_EVENTS <= event.next)
+    if (MAX_EVENTS <= event.next)
         event.next = 0;
 #else
     if (first) {
-        event.start = eventlog_get_count();
+        event.start = evlog_get_count();
         event.next = 0;
     } else
     if (0 == event.next)
         return false;
 
-    if (MAX_LOG_EVENTS <= event.next)
+    if (MAX_EVENTS <= event.next)
         return false;
 #endif
 
-    if (pStr)
-        *pStr = p_event_log->event[event.next].str;
-
-    if (data)
-        *data = p_event_log->event[event.next].data;
+    if (entry)
+        *entry = p_evlog->event[event.next];
 
     event.next++;
 
@@ -227,22 +289,77 @@ bool eventlog_get_event(const char **pStr, uint32_t *data, bool first) {
 
 #include "Print.h"
 
-void print_eventlog(Print& out) {
-  out.println(F("Event LOG From RTC Memory"));
+extern "C" const char _irom0_pstr_start[];
+extern "C" const char _irom0_pstr_end[];
 
-  uint32_t count=0;
-  for (bool more = true; (more) && (count<MAX_LOG_EVENTS); count++) {
-    uint32_t data = 0;
-    const char *pStr = NULL;
-    more = eventlog_get_event(&pStr, &data, (0 == count));
-    if (!pStr)
-      pStr = PSTR("<null>");
-    out.printf(" ");
-    out.printf_P(pStr, data);
+inline __attribute__((__always_inline__))
+bool isPstr(const void *pStr) {
+  return (
+    &_irom0_pstr_start[0] <= pStr &&
+    &_irom0_pstr_end[0]    > pStr &&
+    0 == ((uint32_t)pStr & 3U) );
+}
+
+#define EVLOG_TIMESTAMP_CLOCKCYCLES   (80000000U)
+#define EVLOG_TIMESTAMP_MICROS        (1000000U)
+#define EVLOG_TIMESTAMP_MILLIS        (1000U)
+
+void evlog_print_report(Print& out) {
+  out.println(F("Event Log Report"));
+
+  uint32_t count = 0;
+  for (bool more = true; (more) && (count<MAX_EVENTS); count++) {
+    evlog_entry_t event;
+    more = evlog_get_event(&event, (0 == count));
+    out.printf("  ");
+#if (EVLOG_ARG4 == 4)
+    if (isPstr(event.fmt)) {
+
+#if (EVLOG_TIMESTAMP == EVLOG_TIMESTAMP_CLOCKCYCLES)
+        uint32_t fraction = event.ts;
+        fraction /= clockCyclesPerMicrosecond();
+        time_t gtime = (time_t)(fraction / 1000000U);
+        fraction %= 1000000;
+        const char *ts_fmt = PSTR("%s.%06u: ");
+#elif (EVLOG_TIMESTAMP == EVLOG_TIMESTAMP_MICROS)
+        uint32_t fraction = event.ts;
+        time_t gtime = (time_t)(fraction / 1000000U);
+        fraction %= 1000000;
+        const char *ts_fmt = PSTR("%s.%06u: ");
+#elif (EVLOG_TIMESTAMP == EVLOG_TIMESTAMP_MILLIS)
+        uint32_t fraction = event.ts;
+        time_t gtime = (time_t)(fraction / 1000U);
+        fraction %= 1000U;
+        const char *ts_fmt = PSTR("%s.%03u: ");
+#endif
+#if (EVLOG_TIMESTAMP == EVLOG_TIMESTAMP_CLOCKCYCLES) || (EVLOG_TIMESTAMP == EVLOG_TIMESTAMP_MICROS) || (EVLOG_TIMESTAMP == EVLOG_TIMESTAMP_MILLIS)
+        struct tm *tv = gmtime(&gtime);
+        char buf[10];
+        strftime(buf, sizeof(buf), "%T", tv);
+        out.printf_P(ts_fmt, buf, fraction);
+#endif
+
+      out.printf_P(event.fmt, event.data[0], event.data[1], event.data[2]);
+    } else {
+      out.printf_P("< ? >, 0x%8p, 0x%08X, 0x%08X, 0x%08X",
+                   event.fmt, event.data[0], event.data[1], event.data[2]);
+    }
+#else
+    if (isPstr(event.fmt)) {
+      out.printf_P(event.fmt, event.data[0]);
+    } else {
+      out.printf_P("< ? >, 0x%08X, 0x%08X", event.fmt, event.data[0]);
+    }
+#endif
     out.println();
-    // out.println( String(F(" ")) + String(FPSTR(pStr)) + F(" 0x0") + String(data, HEX) );
   }
-  out.println(String(count) + F(" Log Events of possible ") + String(MAX_LOG_EVENTS) + F(".") );
+
+  out.println(String(count) + F(" Log Events of possible ") + String(MAX_EVENTS) + F(".") );
+  out.println(String("EVLOG_ADDR_SZ = ") + (EVLOG_ADDR_SZ));
+}
+
+void print_evlog(Print& out) {
+  evlog_print_report(out);
 }
 
 #endif // DISABLE_EVENTLOG
