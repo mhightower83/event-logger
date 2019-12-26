@@ -26,17 +26,19 @@
 #define EVLOG_WITH_DRAM 1
 
 /*
-  Time stamp options
+    Timestamp options
 
-  EVLOG_TIMESTAMP_CLOCKCYCLES - lowest over head least intrusive to get. Safe
-  call in every context or just about. Good option for when paranoid.
+    `EVLOG_TIMESTAMP_CLOCKCYCLES` - lowest overhead least intrusive to get. Safe
+    call in every context or just about. A good option for when paranoid.
 
-  EVLOG_TIMESTAMP_MICROS - next in line. Handle up to an hour before wrapping.
-  No experiance at this time.
+    `EVLOG_TIMESTAMP_MICROS` - next in line. Handle up to an hour before
+    wrapping. No experience at this time.
 
-  EVLOG_TIMESTAMP_MILLIS - last in line. Can go for 49 days before wrapping.
-  More code is excuted to get time - unsure of general safety at this time.
-  May not be good for time critial logging. No experiance at this time.
+    `EVLOG_TIMESTAMP_MILLIS` - last in line. It can go for 49 days before
+    wrapping. More code is executed to get time - unsure of general safety at
+    this time. It may not be good for time-critical logging. No experience at
+    this time.
+
 */
 #define EVLOG_TIMESTAMP_CLOCKCYCLES   (80000000U) // Wraps at 53.687091 secs. w/80 Mhz CPU clock
 #define EVLOG_TIMESTAMP_MICROS        (1000000U)  // Wraps at 1:11:34.967295

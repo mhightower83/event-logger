@@ -14,23 +14,25 @@
  *   limitations under the License.
  */
 /*
-   A simple memory event logger. Logs a const string and 32 bit data value.
+    A simple memory event logger. Logs a const string and 32-bit data value.
 
-   Well thats what I started with. This can now save up to 20 bytes per log
-   entry. That is one printf format string created with PSTR(), 3 - 32 bit
-   words, and a 32 bit timestamp. I origianly used User RTC Memory minus the 128
-   bytes the OTA/eboot task consumed.
+    Well, that's what I started with. This can now save up to 20 bytes per log
+    entry. That is one printf format string created with PSTR(), 3 - 32-bit
+    words, and a 32-bit timestamp. I originally used User RTC Memory minus the
+    128 bytes the OTA/eboot task consumed.
 
-   It now use the highest address of DRAM available from the heap. Or more
-   accurately I take a block of memory, DRAM, away from the heap. This block is
-   no longer managed by anyone but my evlog. Nobody zero's it. I have been
-   successful with carrying data forward between boot cycles.
+    It now uses the highest address of DRAM available from the heap. Or more
+    accurately I take a block of memory, DRAM, away from the heap. This block
+    is no longer managed by anyone but EvLog. Nobody zero's it. I have been
+    successful in carrying data forward between boot cycles.
 
-   STATUS: It has been a while since I last used the RTC build option. So the
-   RTC build will not work. There is logic to support a Circular log; however,
-   only the linear log has been used so far. EVLOG_CIRCULAR is untested and
-   does not work. Linear logging option has been working well.
- */
+    STATUS: It has been a while since I last used the RTC build option. So the
+    RTC build will not work. There is logic to support circular logging or
+    linear logging. EVLOG_CIRCULAR has not been tested a lot. The linear
+    logging option has been working well. Linear logging is the default when
+    #define EVLOG_CIRCULAR is omitted.
+
+*/
 #include <Arduino.h>
 #include <stdint.h>
 #include <stddef.h>
