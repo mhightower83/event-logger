@@ -15,9 +15,10 @@ no longer managed by anyone but my evlog. Nobody zero's it. I have been
 successful with carrying data forward between boot cycles.
 
 STATUS: It has been a while since I last used the RTC build option. So the
-RTC build will not work. There is logic to support a Circular log; however,
-only the linear log has been used so far. `EVLOG_CIRCULAR` is untested and
-does not work. Linear logging option has been working well.
+RTC build will not work. There is logic to support circular logging or
+linear logging. `EVLOG_CIRCULAR` has not been tested a lot. The linear logging 
+option has been working well. Linear logging is the default when 
+`#define EVLOG_CIRCULAR` is omited.
 
 ### Time stamp options
 * `EVLOG_TIMESTAMP_CLOCKCYCLES` - lowest over head least intrusive to get. Safe
