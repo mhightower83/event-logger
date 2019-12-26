@@ -55,8 +55,9 @@ extern "C" {
 
 #define EVLOG_NOZERO_COOKIE (0x5A5A0000U)
 #define EVLOG_ENABLE_MASK (0x0FFU)
-#define EVLOG_INIT_MASK (0x0FFU<<8)
 #define EVLOG_COOKIE_MASK (~EVLOG_ENABLE_MASK)
+// #define EVLOG_INIT_MASK (0x0FFU<<8)
+
 #define EVLOG_ARG4 4
 #define EVLOG_ARGS_MAX ((size_t)EVLOG_ARG4 - 1U)
 

@@ -116,14 +116,14 @@ void IRAM_OPTION evlog_init(bool force) {
 
     // We are called early at boot time. When cookie is set don't zero RTC memory
     if ((p_evlog->state & EVLOG_COOKIE_MASK) == EVLOG_NOZERO_COOKIE) {
-        EVLOG2("*** EvLog Resumed *** 0x%08X", dirty_value);
+        EVLOG2(">>> EvLog Resumed <<< 0x%08X", dirty_value);
         return;
     }
 
     evlog_clear_log();
     // Auto enable on init, comment out as the need arises.
     evlog_set_state(1);
-    EVLOG2("*** EvLog Started *** 0x%08", dirty_value);
+    EVLOG2(">>> EvLog Started <<< 0x%08", dirty_value);
 }
 
 // Use something like this when you want to log activity between boot events.
@@ -135,7 +135,7 @@ void IRAM_OPTION evlog_restart(uint32_t state) {
     if (is_inited()) {
         evlog_clear_log();
         evlog_set_state(state);
-        EVLOG1("*** EvLog Restarted ***");
+        EVLOG1(">>> EvLog Restarted <<<");
     } else {
         evlog_init(false);
     }
@@ -373,12 +373,12 @@ void evlogPrintReport(Print& out) {
         out.printf_P(ts_fmt, buf, fraction);
 #endif
 
-      out.printf_P(event.fmt, event.data[0], event.data[1], event.data[2]);
+        out.printf_P(event.fmt, event.data[0], event.data[1], event.data[2]);
     } else {
-      out.printf_P("< ? >, 0x%08X, 0x%08X, 0x%08X, 0x%08X",
-        (uint32_t)event.fmt, event.data[0], event.data[1], event.data[2]);
+        out.printf_P("< ? >, 0x%08X, 0x%08X, 0x%08X, 0x%08X",
+           (uint32_t)event.fmt, event.data[0], event.data[1], event.data[2]);
     }
-#else
+#else   // EVLOG_ARG4 != 4
     if (isPstr(event.fmt)) {
       out.printf_P(event.fmt, event.data[0]);
     } else {

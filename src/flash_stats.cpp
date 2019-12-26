@@ -210,11 +210,13 @@ void printFlashStatsReport(Print& oStream) {
   oStream.println(String_F("  R/W count 0x...FDxxx:     ") + (flash_log.r_count.xxD) + "/" + (flash_log.w_count.xxD));
   oStream.println(String_F("  R/W count 0x...FExxx:     ") + (flash_log.r_count.xxE) + "/" + (flash_log.w_count.xxE));
   oStream.println(String_F("  R/W count 0x...FFxxx:     ") + (flash_log.r_count.xxF) + "/" + (flash_log.w_count.xxF));
+  if (flash_log.r_count.range_error || flash_log.w_count.range_error)
   oStream.println(String_F("  R/W range error:          ") + (flash_log.r_count.range_error) + "/" + (flash_log.w_count.range_error));
   oStream.println(String_F("  R/W PHY Init Data:        ") + (flash_log.r_count.pre_init)  + "/" + (flash_log.w_count.pre_init));
   oStream.println(String_F("  R/W RF_CAL:               ") + (flash_log.r_count.post_init) + "/" + (flash_log.w_count.post_init));
 
   oStream.println(String_F("  match_0xFC:               0x0") + String(flash_log.match.xxC, HEX));
+  if (flash_log.address)
   oStream.println(String_F("  address (should be 0):    0x0") + String(flash_log.address, HEX));
   oStream.println(String_F("  flash_log.flash_size:     0x0") + String(flash_log.chip_size, HEX)        + (", ") + String(flash_log.chip_size));
   oStream.println(String_F("  flashchip->chip_size:     0x0") + String(flashchip->chip_size, HEX)       + (", ") + String(flashchip->chip_size));
