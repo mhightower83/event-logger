@@ -44,3 +44,73 @@ can watch ROM function calls by offerring replacement functions that  then
 passthrough to the origianl ROM function. Evlog is used to capture
 interesting information. Some counters are kept on other Flash functions.
 
+## Edits for umm_malloc_cfg.h
+Find this block of code
+```cpp
+#ifdef TEST_BUILD
+extern char test_umm_heap[];
+#endif
+
+#ifdef TEST_BUILD
+/* Start addresses and the size of the heap */
+#define UMM_MALLOC_CFG_HEAP_ADDR (test_umm_heap)
+#define UMM_MALLOC_CFG_HEAP_SIZE 0x10000
+#else
+/* Start addresses and the size of the heap */
+extern char _heap_start[];
+#define UMM_MALLOC_CFG_HEAP_ADDR   ((uint32_t)&_heap_start[0])
+#define UMM_MALLOC_CFG_HEAP_SIZE   ((size_t)(0x3fffc000 - UMM_MALLOC_CFG_HEAP_ADDR - HEAP_STATIC_RESERVE_ALIGN8_SIZE))
+#endif
+
+/* A couple of macros to make packing structures less compiler dependent */
+```
+Insert this after the 1st `#endif` after `#ifdef TEST_BUILD`
+```cpp
+/*
+ * Reserve a block of space from the Heap DRAM.
+ * Reserved space will not be zeroed by umm_init.
+ * Reserved space is excluded from the heap allocation pool.
+ *   ie. not reported by umm_info.
+ * For all purposes the Heap Manager does not know it exist.
+ * May be used for debugging issues across boot events and other applications.
+ */
+#define HEAP_STATIC_RESERVE_SIZE 1536
+#ifndef HEAP_STATIC_RESERVE_SIZE
+#define HEAP_STATIC_RESERVE_SIZE 0
+#endif
+
+#define HEAP_STATIC_RESERVE_ALIGN8_SIZE ((HEAP_STATIC_RESERVE_SIZE + 7U) & ~7U)
+
+#if HEAP_STATIC_RESERVE_SIZE
+constexpr void * umm_static_reserve_addr =
+  (void *)((uint32_t)0x3fffc000 - (uint32_t)HEAP_STATIC_RESERVE_ALIGN8_SIZE);
+#else
+constexpr void * umm_static_reserve_addr = NULL;
+#endif
+
+constexpr size_t umm_static_reserve_size = (size_t)HEAP_STATIC_RESERVE_SIZE;
+
+inline __attribute__((__always_inline__))
+void *umm_get_static_reserve_addr(void) {
+  return umm_static_reserve_addr;
+}
+
+inline __attribute__((__always_inline__))
+size_t umm_get_static_reserve_size(void) {
+  return umm_static_reserve_size;
+}
+```
+Then edit this line:
+```cpp
+#define UMM_MALLOC_CFG_HEAP_SIZE   ((size_t)(0x3fffc000 - UMM_MALLOC_CFG_HEAP_ADDR))
+```
+To look like this:
+```cpp
+#define UMM_MALLOC_CFG_HEAP_SIZE   ((size_t)(0x3fffc000 - UMM_MALLOC_CFG_HEAP_ADDR - HEAP_STATIC_RESERVE_ALIGN8_SIZE))
+```
+
+Update:
+```cpp
+#define HEAP_STATIC_RESERVE_SIZE 1536
+```
+For the amount of DRAM you want Evlog to use.
