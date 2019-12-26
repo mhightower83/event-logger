@@ -42,7 +42,9 @@ can watch ROM function calls by offerring replacement functions that  then
 passthrough to the origianl ROM function. Evlog is used to capture
 interesting information. Some counters are kept on other Flash functions.
 
-## Edits for umm_malloc_cfg.h
+## EvLog to DRAM
+To use EvLog with DRAM you will need to apply the following edits to `umm_malloc_cfg.h`.
+
 Find this block of code:
 ```cpp
 #ifdef TEST_BUILD
