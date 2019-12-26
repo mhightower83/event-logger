@@ -48,7 +48,9 @@ Find this block of code:
 #ifdef TEST_BUILD
 extern char test_umm_heap[];
 #endif
-
+```
+_new stuff will go here_
+```cpp
 #ifdef TEST_BUILD
 /* Start addresses and the size of the heap */
 #define UMM_MALLOC_CFG_HEAP_ADDR (test_umm_heap)
@@ -57,12 +59,12 @@ extern char test_umm_heap[];
 /* Start addresses and the size of the heap */
 extern char _heap_start[];
 #define UMM_MALLOC_CFG_HEAP_ADDR   ((uint32_t)&_heap_start[0])
-#define UMM_MALLOC_CFG_HEAP_SIZE   ((size_t)(0x3fffc000 - UMM_MALLOC_CFG_HEAP_ADDR - HEAP_STATIC_RESERVE_ALIGN8_SIZE))
+#define UMM_MALLOC_CFG_HEAP_SIZE   ((size_t)(0x3fffc000 - UMM_MALLOC_CFG_HEAP_ADDR))
 #endif
 
 /* A couple of macros to make packing structures less compiler dependent */
 ```
-Insert this block after the 1st `#endif` after `#ifdef TEST_BUILD`:
+Insert this block after the 1st `#endif`:
 ```cpp
 /*
  * Reserve a block of space from the Heap DRAM.
