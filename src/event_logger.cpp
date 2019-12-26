@@ -53,13 +53,13 @@ extern "C" {
 #ifdef EVLOG_WITH_DRAM
 #define EVLOG_ADDR_QUALIFIER
 #define EVLOG_ADDR ((EVLOG_ADDR_QUALIFIER uint32_t*)umm_static_reserve_addr)
-#define EVLOG_ADDR_SZ (umm_static_reserve_size/sizeof(uint32_t) - 2U)
+#define EVLOG_ADDR_SZ (umm_static_reserve_size/sizeof(uint32_t) - 3U)
 
 #else
 #define EVLOG_RTC_MEMORY 1
 #define EVLOG_ADDR_QUALIFIER volatile
 #define EVLOG_ADDR ((EVLOG_ADDR_QUALIFIER uint32_t*)0x60001280U)
-#define EVLOG_ADDR_SZ ((uint32_t)128 - 32U - 2U)  // USER_RTC - EBOOT - sizeof(num and state)
+#define EVLOG_ADDR_SZ ((uint32_t)128 - 32U - 3U)  // USER_RTC - EBOOT - sizeof(num and state) - sizeof(bool?)
 #endif
 
 #ifndef MAX_EVENTS
@@ -70,6 +70,7 @@ typedef struct _EVENT_LOG {
     uint32_t num;
     uint32_t state;
     evlog_entry_t event[MAX_EVENTS];
+    bool wrapped;
 } evlog_t;
 
 #ifdef EVLOG_WITH_DRAM
@@ -123,7 +124,10 @@ void IRAM_OPTION evlog_init(bool force) {
     EVLOG2("*** EvLog Started *** 0x%08", dirty_value);
 }
 
-// evlog_restart(EVLOG_NOZERO_COOKIE | 1);
+// Use something like this when you want to log activity between boot events.
+// Place the line where needed to capture what you want to see before the
+// reboot command.
+//     evlog_restart(EVLOG_NOZERO_COOKIE | 1);
 
 void IRAM_OPTION evlog_restart(uint32_t state) {
     if (is_inited()) {
@@ -152,8 +156,10 @@ uint32_t IRAM_OPTION evlog_event4(const char *fmt, uint32_t data0, uint32_t data
 
   if (evlog_is_enable()) {
       uint32_t num = p_evlog->num;
-      if (num >= MAX_EVENTS)
+      if (num >= MAX_EVENTS) {
           num = 0;
+          p_evlog->wrapped = true;
+      }
 
       p_evlog->event[num].fmt = fmt;
       p_evlog->event[num].data[0] = data0;
@@ -181,8 +187,10 @@ uint32_t IRAM_OPTION evlog_event2(const char *fmt, uint32_t data0) {
 
     if (evlog_is_enable()) {
         uint32_t num = p_evlog->num;
-        if (num >= MAX_EVENTS)
+        if (num >= MAX_EVENTS) {
             num = 0;
+            p_evlog->wrapped = true;
+        }
 
         p_evlog->event[num].fmt = fmt;
         p_evlog->event[num].data[0] = data0;
@@ -218,6 +226,7 @@ uint32_t IRAM_OPTION evlog_event4(const char *fmt, uint32_t data0, uint32_t data
             return num;
         } else {
             p_evlog->state &= ~EVLOG_ENABLE_MASK;
+            p_evlog->wrapped = true;
         }
     }
 
@@ -241,6 +250,7 @@ uint32_t IRAM_OPTION evlog_event2(const char *fmt, uint32_t data) {
             return num;
         } else {
             p_evlog->state &= ~EVLOG_ENABLE_MASK;
+            p_evlog->wrapped = true;
         }
     }
 
@@ -250,39 +260,44 @@ uint32_t IRAM_OPTION evlog_event2(const char *fmt, uint32_t data) {
 #endif
 
 uint32_t evlog_get_count(void) {
-    if (is_inited())
-        return p_evlog->num;
+    if (is_inited()) {
+        if (p_evlog->wrapped)
+            return MAX_EVENTS;
 
+        return p_evlog->num;
+    }
+
+    return 0U;
+}
+
+uint32_t evlog_get_start_index(void) {
+#ifdef EVLOG_CIRCULAR
+    if (is_inited() && p_evlog->wrapped)
+            return p_evlog->num;
+#endif
     return 0U;
 }
 
 bool evlog_get_event(evlog_entry_t *entry, bool first) {
     static struct {
         uint32_t next;
-        uint32_t start;
+        uint32_t stop;
     } event = {0, 0};
 
     if (!is_inited())
         return false;
 
-#ifdef EVLOG_CIRCULAR
     if (first) {
-        event.start = event.next = evlog_get_count();
-        event.next++;
+        event.stop = p_evlog->num;
+        event.next = evlog_get_start_index();
     } else
     if (0 == event.next)
         return false;
 
+#ifdef EVLOG_CIRCULAR
     if (MAX_EVENTS <= event.next)
         event.next = 0;
 #else
-    if (first) {
-        event.start = evlog_get_count();
-        event.next = 0;
-    } else
-    if (0 == event.next)
-        return false;
-
     if (MAX_EVENTS <= event.next)
         return false;
 #endif
@@ -292,7 +307,7 @@ bool evlog_get_event(evlog_entry_t *entry, bool first) {
 
     event.next++;
 
-    if (event.next == event.start) {
+    if (event.next == event.stop) {
         event.next = 0;  // stop we are done
         return false;
     }
@@ -347,7 +362,9 @@ void evlogPrintReport(Print& out) {
         fraction %= 1000U;
         const char *ts_fmt = PSTR("%s.%03u: ");
 #endif
-#if (EVLOG_TIMESTAMP == EVLOG_TIMESTAMP_CLOCKCYCLES) || (EVLOG_TIMESTAMP == EVLOG_TIMESTAMP_MICROS) || (EVLOG_TIMESTAMP == EVLOG_TIMESTAMP_MILLIS)
+#if (EVLOG_TIMESTAMP == EVLOG_TIMESTAMP_CLOCKCYCLES) || \
+    (EVLOG_TIMESTAMP == EVLOG_TIMESTAMP_MICROS) || \
+    (EVLOG_TIMESTAMP == EVLOG_TIMESTAMP_MILLIS)
         struct tm *tv = gmtime(&gtime);
         char buf[10];
         strftime(buf, sizeof(buf), "%T", tv);
@@ -356,8 +373,8 @@ void evlogPrintReport(Print& out) {
 
       out.printf_P(event.fmt, event.data[0], event.data[1], event.data[2]);
     } else {
-      out.printf_P("< ? >, 0x%8p, 0x%08X, 0x%08X, 0x%08X",
-                   event.fmt, event.data[0], event.data[1], event.data[2]);
+      out.printf_P("< ? >, 0x%08X, 0x%08X, 0x%08X, 0x%08X",
+        (uint32_t)event.fmt, event.data[0], event.data[1], event.data[2]);
     }
 #else
     if (isPstr(event.fmt)) {
@@ -372,9 +389,5 @@ void evlogPrintReport(Print& out) {
   out.println(String(count) + F(" Log Events of possible ") + String(MAX_EVENTS) + F(".") );
   out.println(String("EVLOG_ADDR_SZ = ") + (EVLOG_ADDR_SZ));
 }
-
-// void print_evlog(Print& out) {
-//   evlogPrintReport(out);
-// }
 
 #endif // DISABLE_EVLOG
