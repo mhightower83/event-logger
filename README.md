@@ -2,7 +2,7 @@
 * TODO: Explain core changes needed to use etc.
 * TODO: Explain how to use
 
-An Event Logger for using with Arduino ESP8266 Core
+## An Event Logger for using with Arduino ESP8266 Core
 
 A simple memory event logger. Logs a const string and 32 bit data value.
 
@@ -30,7 +30,9 @@ No experiance at this time.
 More code is excuted to get time - unsure of general safety at this time.
 May not be good for time critial logging. No experiance at this time.
 
-### Flash Stats
+## Flash Stats
+An add on to use with Evlog.
+
 Purpose here is to gain insight on what and how the ROM routines are used.
 Two areas of interest
   1) Flash access
