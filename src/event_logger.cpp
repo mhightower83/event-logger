@@ -13,9 +13,24 @@
  *   See the License for the specific language governing permissions and
  *   limitations under the License.
  */
-//
-// A simple memory event logger log a const string and 32 bit data value.
-//
+/*
+   A simple memory event logger. Logs a const string and 32 bit data value.
+
+   Well thats what I started with. This can now save up to 20 bytes per log
+   entry. That is one printf format string created with PSTR(), 3 - 32 bit
+   words, and a 32 bit timestamp. I origianly used User RTC Memory minus the 128
+   bytes the OTA/eboot task consumed.
+
+   It now use the highest address of DRAM available from the heap. Or more
+   accurately I take a block of memory, DRAM, away from the heap. This block is
+   no longer managed by anyone but my evlog. Nobody zero's it. I have been
+   successful with carrying data forward between boot cycles.
+
+   STATUS: It has been a while since I last used the RTC build option. So the
+   RTC build will not work. There is logic to support a Circular log; however,
+   only the linear log has been used so far. EVLOG_CIRCULAR is untested and
+   does not work. Linear logging option has been working well.
+ */
 #include <Arduino.h>
 #include <stdint.h>
 #include <stddef.h>
@@ -24,7 +39,7 @@
 #include "c_types.h"
 #include "ets_sys.h"
 #include "user_interface.h"
-// #include <pgmspace.h>
+
 #include <umm_malloc/umm_malloc_cfg.h>
 #include <evlog/src/event_logger.h>
 
@@ -97,24 +112,24 @@ void IRAM_OPTION evlog_init(bool force) {
     p_evlog = (evlog_t EVLOG_ADDR_QUALIFIER *)EVLOG_ADDR;
 
     // We are called early at boot time. When cookie is set don't zero RTC memory
-    if ((p_evlog->state & EVENTLOG_COOKIE_MASK) == EVENTLOG_NOZERO_COOKIE) {
-        EVLOG2("*** EventLog Resumed *** 0x%08X", dirty_value);
+    if ((p_evlog->state & EVLOG_COOKIE_MASK) == EVLOG_NOZERO_COOKIE) {
+        EVLOG2("*** EvLog Resumed *** 0x%08X", dirty_value);
         return;
     }
 
     evlog_clear_log();
     // Auto enable on init, comment out as the need arises.
     evlog_set_state(1);
-    EVLOG2("*** EventLog Started *** 0x%08", dirty_value);
+    EVLOG2("*** EvLog Started *** 0x%08", dirty_value);
 }
 
-// evlog_restart(EVENTLOG_NOZERO_COOKIE | 1);
+// evlog_restart(EVLOG_NOZERO_COOKIE | 1);
 
 void IRAM_OPTION evlog_restart(uint32_t state) {
     if (is_inited()) {
         evlog_clear_log();
         evlog_set_state(state);
-        EVLOG1("*** EventLog Restarted ***");
+        EVLOG1("*** EvLog Restarted ***");
     } else {
         evlog_init(false);
     }
@@ -123,14 +138,14 @@ void IRAM_OPTION evlog_restart(uint32_t state) {
 bool IRAM_OPTION evlog_is_enable(void) {
     if (is_inited()) {
         uint32_t state = evlog_get_state();
-        state &= EVENTLOG_ENABLE_MASK;
+        state &= EVLOG_ENABLE_MASK;
         return (0 == state) ? false : true;
     }
 
     return false;
 }
 
-#ifdef EVENTLOG_CIRCULAR
+#ifdef EVLOG_CIRCULAR
 #if (EVLOG_ARG4 == 4)
 uint32_t IRAM_OPTION evlog_event4(const char *fmt, uint32_t data0, uint32_t data1, uint32_t data2) {
   evlog_init(false);
@@ -202,7 +217,7 @@ uint32_t IRAM_OPTION evlog_event4(const char *fmt, uint32_t data0, uint32_t data
             p_evlog->num = ++num;
             return num;
         } else {
-            p_evlog->state &= ~EVENTLOG_ENABLE_MASK;
+            p_evlog->state &= ~EVLOG_ENABLE_MASK;
         }
     }
 
@@ -225,7 +240,7 @@ uint32_t IRAM_OPTION evlog_event2(const char *fmt, uint32_t data) {
             p_evlog->num = ++num;
             return num;
         } else {
-            p_evlog->state &= ~EVENTLOG_ENABLE_MASK;
+            p_evlog->state &= ~EVLOG_ENABLE_MASK;
         }
     }
 
@@ -250,7 +265,7 @@ bool evlog_get_event(evlog_entry_t *entry, bool first) {
     if (!is_inited())
         return false;
 
-#ifdef EVENTLOG_CIRCULAR
+#ifdef EVLOG_CIRCULAR
     if (first) {
         event.start = event.next = evlog_get_count();
         event.next++;
@@ -304,7 +319,7 @@ bool isPstr(const void *pStr) {
 #define EVLOG_TIMESTAMP_MICROS        (1000000U)
 #define EVLOG_TIMESTAMP_MILLIS        (1000U)
 
-void evlog_print_report(Print& out) {
+void evlogPrintReport(Print& out) {
   out.println(F("Event Log Report"));
 
   uint32_t count = 0;
@@ -358,8 +373,8 @@ void evlog_print_report(Print& out) {
   out.println(String("EVLOG_ADDR_SZ = ") + (EVLOG_ADDR_SZ));
 }
 
-void print_evlog(Print& out) {
-  evlog_print_report(out);
-}
+// void print_evlog(Print& out) {
+//   evlogPrintReport(out);
+// }
 
-#endif // DISABLE_EVENTLOG
+#endif // DISABLE_EVLOG

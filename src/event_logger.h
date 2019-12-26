@@ -49,10 +49,10 @@ extern "C" {
 #endif
 
 
-#define EVENTLOG_NOZERO_COOKIE (0x5A5A0000U)
-#define EVENTLOG_ENABLE_MASK (0x0FFU)
-#define EVENTLOG_INIT_MASK (0x0FFU<<8)
-#define EVENTLOG_COOKIE_MASK (~EVENTLOG_ENABLE_MASK)
+#define EVLOG_NOZERO_COOKIE (0x5A5A0000U)
+#define EVLOG_ENABLE_MASK (0x0FFU)
+#define EVLOG_INIT_MASK (0x0FFU<<8)
+#define EVLOG_COOKIE_MASK (~EVLOG_ENABLE_MASK)
 #define EVLOG_ARG4 4
 #define EVLOG_ARGS_MAX ((size_t)EVLOG_ARG4 - 1U)
 
@@ -97,20 +97,20 @@ bool evlog_get_event(evlog_entry_t *entry, bool first);
 #endif
 
 #ifdef Print_h
-void evlog_print_report(Print& out);
+void evlogPrintReport(Print& out);
 #endif
 
 #define EVLOG4_P(fmt, val0, val1, val2) evlog_event4((fmt), (uint32_t)(val0), (uint32_t)(val1), (uint32_t)(val2))
 #define EVLOG4(fmt, val0, val1, val2)  EVLOG4_P(PSTR(fmt), (val0), (val1), (val2))
 
 #define EVLOG3_P(fmt, val0, val1) EVLOG4_P((fmt), (val0), (val1), 0)
-#define EVLOG3(fmt, val0, val1)  EVLOG4_P(PSTR(fmt), (val0), (val1), 0)
+#define EVLOG3(fmt, val0, val1)  EVLOG3_P(PSTR(fmt), (val0), (val1))
 
-// #define EVLOG2_P(fmt, val0) EVLOG3_P((fmt), (val0), 0)
-// #define EVLOG2(fmt, val0) EVLOG2_P(PSTR(fmt), (val0))
-
-#define EVLOG2_P(fmt, val0) EVLOG4_P((fmt), (val0), 0, 0)
-#define EVLOG2(fmt, val0) EVLOG4_P(PSTR(fmt), (val0), 0, 0)
+#define EVLOG2_P(fmt, val0) EVLOG3_P((fmt), (val0), 0)
+#define EVLOG2(fmt, val0) EVLOG2_P(PSTR(fmt), (val0))
+//
+// #define EVLOG2_P(fmt, val0) EVLOG4_P((fmt), (val0), 0, 0)
+// #define EVLOG2(fmt, val0) EVLOG4_P(PSTR(fmt), (val0), 0, 0)
 
 #define EVLOG1_P(fmt) EVLOG2_P(fmt, 0)
 #define EVLOG1(fmt) EVLOG1_P(PSTR(fmt))
@@ -123,8 +123,8 @@ void evlog_print_report(Print& out);
 #define evlog_restart(state) do{}while(false)
 #endif
 #ifdef Print_h
-#ifndef evlog_print_report
-#define evlog_print_report(out)  do{}while(false)
+#ifndef evlogPrintReport
+#define evlogPrintReport(out) do{}while(false)
 #endif
 #endif
 #ifndef EVLOG4
