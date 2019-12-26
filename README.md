@@ -6,9 +6,7 @@
 
 A simple memory event logger. Logs a const string and 32 bit data value.
 
-Well thats what I started with. This can now save up to 20 bytes per log
-entry. That is one printf format string created with `PSTR()`, 3 - 32 bit
-words, and a 32 bit timestamp. I origianly used User RTC Memory minus the 128
+Well thats what I started with. This can now save up to 20 bytes per log entry. That is one printf format string created with `PSTR()`, 3 - 32 bit words, and a 32 bit timestamp. I origianly used User RTC Memory minus the 128
 bytes the OTA/eboot task consumed.
 
 It now use the highest address of DRAM available from the heap. Or more
@@ -18,15 +16,15 @@ successful with carrying data forward between boot cycles.
 
 STATUS: It has been a while since I last used the RTC build option. So the
 RTC build will not work. There is logic to support a Circular log; however,
-only the linear log has been used so far. EVLOG_CIRCULAR is untested and
+only the linear log has been used so far. `EVLOG_CIRCULAR` is untested and
 does not work. Linear logging option has been working well.
 
 ### Time stamp options
-* EVLOG_TIMESTAMP_CLOCKCYCLES - lowest over head least intrusive to get. Safe
+* `EVLOG_TIMESTAMP_CLOCKCYCLES` - lowest over head least intrusive to get. Safe
 call in every context or just about. Good option for when paranoid.
-* EVLOG_TIMESTAMP_MICROS - next in line. Handle up to an hour before wrapping.
+* `EVLOG_TIMESTAMP_MICROS` - next in line. Handle up to an hour before wrapping.
 No experiance at this time.
-* EVLOG_TIMESTAMP_MILLIS - last in line. Can go for 49 days before wrapping.
+* `EVLOG_TIMESTAMP_MILLIS` - last in line. Can go for 49 days before wrapping.
 More code is excuted to get time - unsure of general safety at this time.
 May not be good for time critial logging. No experiance at this time.
 
@@ -45,7 +43,7 @@ passthrough to the origianl ROM function. Evlog is used to capture
 interesting information. Some counters are kept on other Flash functions.
 
 ## Edits for umm_malloc_cfg.h
-Find this block of code
+Find this block of code:
 ```cpp
 #ifdef TEST_BUILD
 extern char test_umm_heap[];
@@ -64,7 +62,7 @@ extern char _heap_start[];
 
 /* A couple of macros to make packing structures less compiler dependent */
 ```
-Insert this after the 1st `#endif` after `#ifdef TEST_BUILD`
+Insert this block after the 1st `#endif` after `#ifdef TEST_BUILD`:
 ```cpp
 /*
  * Reserve a block of space from the Heap DRAM.
@@ -109,7 +107,7 @@ To look like this:
 #define UMM_MALLOC_CFG_HEAP_SIZE   ((size_t)(0x3fffc000 - UMM_MALLOC_CFG_HEAP_ADDR - HEAP_STATIC_RESERVE_ALIGN8_SIZE))
 ```
 
-Update this line for the amount of DRAM you want EvLog to use:
+To change the buffer size find and update this line for the amount of DRAM you want EvLog to use:
 ```cpp
 #define HEAP_STATIC_RESERVE_SIZE 1536
 ```
