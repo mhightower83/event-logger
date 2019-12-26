@@ -1,4 +1,4 @@
-# Evlog a Simple Event Logger for Debugging
+# EvLog a Simple Event Logger for Debugging
 * TODO: Explain core changes needed to use etc.
 * TODO: Explain how to use
 
@@ -109,8 +109,8 @@ To look like this:
 #define UMM_MALLOC_CFG_HEAP_SIZE   ((size_t)(0x3fffc000 - UMM_MALLOC_CFG_HEAP_ADDR - HEAP_STATIC_RESERVE_ALIGN8_SIZE))
 ```
 
-Update:
+Update this line for the amount of DRAM you want EvLog to use:
 ```cpp
 #define HEAP_STATIC_RESERVE_SIZE 1536
 ```
-For the amount of DRAM you want Evlog to use.
+
