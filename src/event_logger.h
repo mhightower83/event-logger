@@ -20,7 +20,7 @@
 #define EVENT_LOGGER_H
 
 #define ENABLE_EVLOG
-#define EVLOG_CIRCULAR
+// #define EVLOG_CIRCULAR
 
 #ifdef ENABLE_EVLOG
 #define EVLOG_WITH_DRAM 1
@@ -45,7 +45,7 @@
 #define EVLOG_TIMESTAMP_MILLIS        (1000U)     // Wraps at 49D 17:02:47.295
 
 // Selected Timestamp option from above
-#define EVLOG_TIMESTAMP     EVLOG_TIMESTAMP_MICROS
+#define EVLOG_TIMESTAMP     EVLOG_TIMESTAMP_CLOCKCYCLES
 // #undef EVLOG_TIMESTAMP
 
 #ifdef __cplusplus

@@ -82,7 +82,7 @@ static_assert((sizeof(evlog_t) + ((uint32_t)EVLOG_ADDR - 0x60001200U) <= 512U), 
 #endif
 
 
-static evlog_t EVLOG_ADDR_QUALIFIER * p_evlog __attribute__((section(".noinit")));;
+static evlog_t EVLOG_ADDR_QUALIFIER * p_evlog __attribute__((section(".noinit")));
 
 inline void IRAM_OPTION evlog_clear_log(void) {
      for (size_t i=0; i<(sizeof(evlog_t)/sizeof(int32_t)); i++)
@@ -300,7 +300,7 @@ bool evlog_get_event(evlog_entry_t *entry, bool first) {
     if (MAX_EVENTS <= event.next)
         event.next = 0;
 #else
-    if (MAX_EVENTS <= event.next)
+    if (MAX_EVENTS <= event.next || 0 == event.stop)
         return false;
 #endif
 
@@ -343,52 +343,58 @@ void evlogPrintReport(Print& out) {
   for (bool more = true; (more) && (count<MAX_EVENTS); count++) {
     evlog_entry_t event;
     more = evlog_get_event(&event, (0 == count));
+    if (0 == count && !more)
+        break;
+
     out.printf("  ");
-#if (EVLOG_ARG4 == 4)
+// #if (EVLOG_ARG4 == 4)
     if (isPstr(event.fmt)) {
 
-#if (EVLOG_TIMESTAMP == EVLOG_TIMESTAMP_CLOCKCYCLES)
+// #if (EVLOG_TIMESTAMP == EVLOG_TIMESTAMP_CLOCKCYCLES)
         uint32_t fraction = event.ts;
         fraction /= clockCyclesPerMicrosecond();
         time_t gtime = (time_t)(fraction / 1000000U);
         fraction %= 1000000;
         const char *ts_fmt = PSTR("%s.%06u: ");
-#elif (EVLOG_TIMESTAMP == EVLOG_TIMESTAMP_MICROS)
-        uint32_t fraction = event.ts;
-        time_t gtime = (time_t)(fraction / 1000000U);
-        fraction %= 1000000;
-        const char *ts_fmt = PSTR("%s.%06u: ");
-#elif (EVLOG_TIMESTAMP == EVLOG_TIMESTAMP_MILLIS)
-        uint32_t fraction = event.ts;
-        time_t gtime = (time_t)(fraction / 1000U);
-        fraction %= 1000U;
-        const char *ts_fmt = PSTR("%s.%03u: ");
-#endif
-#if (EVLOG_TIMESTAMP == EVLOG_TIMESTAMP_CLOCKCYCLES) || \
-    (EVLOG_TIMESTAMP == EVLOG_TIMESTAMP_MICROS) || \
-    (EVLOG_TIMESTAMP == EVLOG_TIMESTAMP_MILLIS)
+// #elif (EVLOG_TIMESTAMP == EVLOG_TIMESTAMP_MICROS)
+//         uint32_t fraction = event.ts;
+//         time_t gtime = (time_t)(fraction / 1000000U);
+//         fraction %= 1000000;
+//         const char *ts_fmt = PSTR("%s.%06u: ");
+// #elif (EVLOG_TIMESTAMP == EVLOG_TIMESTAMP_MILLIS)
+//         uint32_t fraction = event.ts;
+//         time_t gtime = (time_t)(fraction / 1000U);
+//         fraction %= 1000U;
+//         const char *ts_fmt = PSTR("%s.%03u: ");
+// #endif
+// #if (EVLOG_TIMESTAMP == EVLOG_TIMESTAMP_CLOCKCYCLES) || \
+//     (EVLOG_TIMESTAMP == EVLOG_TIMESTAMP_MICROS) || \
+//     (EVLOG_TIMESTAMP == EVLOG_TIMESTAMP_MILLIS)
         struct tm *tv = gmtime(&gtime);
         char buf[10];
-        strftime(buf, sizeof(buf), "%T", tv);
-        out.printf_P(ts_fmt, buf, fraction);
-#endif
+        if (strftime(buf, sizeof(buf), "%T", tv) > 0) {
+            out.printf_P(ts_fmt, buf, fraction);
+        } else {
+            out.print(F("--->>> "));
+        }
+// #endif
 
         out.printf_P(event.fmt, event.data[0], event.data[1], event.data[2]);
     } else {
         out.printf_P("< ? >, 0x%08X, 0x%08X, 0x%08X, 0x%08X",
            (uint32_t)event.fmt, event.data[0], event.data[1], event.data[2]);
     }
-#else   // EVLOG_ARG4 != 4
-    if (isPstr(event.fmt)) {
-      out.printf_P(event.fmt, event.data[0]);
-    } else {
-      out.printf_P("< ? >, 0x%08X, 0x%08X", event.fmt, event.data[0]);
-    }
-#endif
+// #else   // EVLOG_ARG4 != 4
+//     if (isPstr(event.fmt)) {
+//       out.printf_P(event.fmt, event.data[0]);
+//     } else {
+//       out.printf_P("< ? >, 0x%08X, 0x%08X", event.fmt, event.data[0]);
+//     }
+// #endif
     out.println();
   }
 
-  out.println(String(count) + F(" Log Events of possible ") + String(MAX_EVENTS) + F(".") );
+  out.println(String(count) + F(" Logged Events of a possible ") + String(MAX_EVENTS) + '.');
   out.println(String("EVLOG_ADDR_SZ = ") + (EVLOG_ADDR_SZ));
 }
 
