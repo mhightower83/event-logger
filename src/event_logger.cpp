@@ -67,6 +67,7 @@ extern "C" {
 #ifndef MAX_EVENTS
 #define MAX_EVENTS (EVLOG_ADDR_SZ/(sizeof(evlog_entry_t)/sizeof(uint32_t))) //(47)
 #endif
+
 typedef struct _EVLOG_STRUCT evlog_t;
 
 struct _EVLOG_STRUCT {
@@ -83,10 +84,12 @@ static_assert((sizeof(evlog_t) <= umm_static_reserve_size), "MAX_EVENTS too larg
 static_assert((sizeof(evlog_t) + ((uint32_t)EVLOG_ADDR - 0x60001200U) <= 512U), "MAX_EVENTS too large. Total RTC Memory usage exceeds 512.");
 #endif
 
-
-static evlog_t EVLOG_ADDR_QUALIFIER * p_evlog __attribute__((section(".noinit")));
-// constexpr evlog_t *p_evlog = (evlog_t EVLOG_ADDR_QUALIFIER *)umm_static_reserve_addr;
-
+//D #if 0 //def EVLOG_WITH_DRAM
+//D // static evlog_t EVLOG_ADDR_QUALIFIER * p_evlog __attribute__((section(".noinit")));
+//D constexpr evlog_t EVLOG_ADDR_QUALIFIER * p_evlog = (evlog_t EVLOG_ADDR_QUALIFIER *)umm_static_reserve_addr;
+//D #else
+constexpr evlog_t EVLOG_ADDR_QUALIFIER * p_evlog = (evlog_t EVLOG_ADDR_QUALIFIER *)EVLOG_ADDR;
+//D #endif
 
 inline void IRAM_OPTION evlog_clear_log(void) {
     evlog_t *save_ev = p_evlog->this_evlog;
@@ -99,8 +102,8 @@ inline void IRAM_OPTION evlog_clear_log(void) {
 
 inline bool IRAM_OPTION is_inited(void) {
   // return ((evlog_t EVLOG_ADDR_QUALIFIER *)EVLOG_ADDR == p_evlog);
-  return ((uint32_t)EVLOG_ADDR == (uint32_t)p_evlog) && //;
-         ((uint32_t)p_evlog == (uint32_t)p_evlog->this_evlog);
+  // return ((uint32_t)EVLOG_ADDR == (uint32_t)p_evlog) && //;
+  return        ((uint32_t)p_evlog == (uint32_t)p_evlog->this_evlog);
 }
 
 uint32_t IRAM_OPTION evlog_get_state(void) {
@@ -119,7 +122,7 @@ uint32_t IRAM_OPTION evlog_set_state(uint32_t state) {
 uint32_t IRAM_OPTION evlog_init(void) {
     uint32_t dirty_value = (uint32_t)p_evlog;
     if (!is_inited()) {
-        p_evlog = (evlog_t EVLOG_ADDR_QUALIFIER *)EVLOG_ADDR;
+        // p_evlog = (evlog_t EVLOG_ADDR_QUALIFIER *)EVLOG_ADDR;
         p_evlog->this_evlog = p_evlog;
     }
     return dirty_value;
@@ -129,6 +132,10 @@ void IRAM_OPTION evlog_preinit(void) {
     uint32_t dirty_value = evlog_init();
     // If we are called early at boot time. When cookie is set don't zero memory
     if ((p_evlog->state & EVLOG_COOKIE_MASK) == EVLOG_NOZERO_COOKIE) {
+        if (MAX_EVENTS < p_evlog->num)
+            p_evlog->num = MAX_EVENTS; // Make it a valid value number, log full.
+            // Should never occur; however, this will allow for recovery of
+            // log in some broken situations.
         EVLOG3(">>> EvLog Resumed <<< 0x%08X, 0x%08X", p_evlog->state, dirty_value);
         return;
     }
