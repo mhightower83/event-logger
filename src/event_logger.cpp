@@ -54,26 +54,28 @@ extern "C" {
 // Start event log after OTA Data - this leaves 96 words
 #ifdef EVLOG_WITH_DRAM
 #define EVLOG_ADDR_QUALIFIER
-#define EVLOG_ADDR ((EVLOG_ADDR_QUALIFIER uint32_t*)umm_static_reserve_addr)
-#define EVLOG_ADDR_SZ (umm_static_reserve_size/sizeof(uint32_t) - 3U)
+#define EVLOG_ADDR ((EVLOG_ADDR_QUALIFIER uint32_t *)umm_static_reserve_addr)
+#define EVLOG_ADDR_SZ (umm_static_reserve_size/sizeof(uint32_t) - 5U)
 
 #else
 #define EVLOG_RTC_MEMORY 1
 #define EVLOG_ADDR_QUALIFIER volatile
 #define EVLOG_ADDR ((EVLOG_ADDR_QUALIFIER uint32_t*)0x60001280U)
-#define EVLOG_ADDR_SZ ((uint32_t)128 - 32U - 3U)  // USER_RTC - EBOOT - sizeof(num and state) - sizeof(bool?)
+#define EVLOG_ADDR_SZ ((uint32_t)128 - 32U - 5U)  // USER_RTC - EBOOT - sizeof(num and state) - sizeof(bool?)
 #endif
 
 #ifndef MAX_EVENTS
 #define MAX_EVENTS (EVLOG_ADDR_SZ/(sizeof(evlog_entry_t)/sizeof(uint32_t))) //(47)
 #endif
+typedef struct _EVLOG_STRUCT evlog_t;
 
-typedef struct _EVENT_LOG {
+struct _EVLOG_STRUCT {
+    evlog_t * this_evlog;
     uint32_t num;
     uint32_t state;
     evlog_entry_t event[MAX_EVENTS];
     bool wrapped;
-} evlog_t;
+};
 
 #ifdef EVLOG_WITH_DRAM
 static_assert((sizeof(evlog_t) <= umm_static_reserve_size), "MAX_EVENTS too large exceeds static reserve size.");
@@ -83,15 +85,22 @@ static_assert((sizeof(evlog_t) + ((uint32_t)EVLOG_ADDR - 0x60001200U) <= 512U), 
 
 
 static evlog_t EVLOG_ADDR_QUALIFIER * p_evlog __attribute__((section(".noinit")));
+// constexpr evlog_t *p_evlog = (evlog_t EVLOG_ADDR_QUALIFIER *)umm_static_reserve_addr;
+
 
 inline void IRAM_OPTION evlog_clear_log(void) {
-     for (size_t i=0; i<(sizeof(evlog_t)/sizeof(int32_t)); i++)
-         EVLOG_ADDR[i]=0;
+    evlog_t *save_ev = p_evlog->this_evlog;
+
+    for (size_t i=0; i<(sizeof(evlog_t)/sizeof(int32_t)); i++)
+        EVLOG_ADDR[i]=0;
+
+    p_evlog->this_evlog = save_ev;
 }
 
 inline bool IRAM_OPTION is_inited(void) {
   // return ((evlog_t EVLOG_ADDR_QUALIFIER *)EVLOG_ADDR == p_evlog);
-  return ((uint32_t)EVLOG_ADDR == (uint32_t)p_evlog);
+  return ((uint32_t)EVLOG_ADDR == (uint32_t)p_evlog) && //;
+         ((uint32_t)p_evlog == (uint32_t)p_evlog->this_evlog);
 }
 
 uint32_t IRAM_OPTION evlog_get_state(void) {
@@ -107,23 +116,25 @@ uint32_t IRAM_OPTION evlog_set_state(uint32_t state) {
     return previous;
 }
 
-void IRAM_OPTION evlog_init(bool force) {
-    if (!force && is_inited())
-        return;
-
+uint32_t IRAM_OPTION evlog_init(void) {
     uint32_t dirty_value = (uint32_t)p_evlog;
-    p_evlog = (evlog_t EVLOG_ADDR_QUALIFIER *)EVLOG_ADDR;
+    if (!is_inited()) {
+        p_evlog = (evlog_t EVLOG_ADDR_QUALIFIER *)EVLOG_ADDR;
+        p_evlog->this_evlog = p_evlog;
+    }
+    return dirty_value;
+}
 
-    // We are called early at boot time. When cookie is set don't zero RTC memory
+void IRAM_OPTION evlog_preinit(void) {
+    uint32_t dirty_value = evlog_init();
+    // If we are called early at boot time. When cookie is set don't zero memory
     if ((p_evlog->state & EVLOG_COOKIE_MASK) == EVLOG_NOZERO_COOKIE) {
-        EVLOG2(">>> EvLog Resumed <<< 0x%08X", dirty_value);
+        EVLOG3(">>> EvLog Resumed <<< 0x%08X, 0x%08X", p_evlog->state, dirty_value);
         return;
     }
-
     evlog_clear_log();
-    // Auto enable on init, comment out as the need arises.
     evlog_set_state(1);
-    EVLOG2(">>> EvLog Started <<< 0x%08", dirty_value);
+    EVLOG3(">>> EvLog Inited <<< 0x%08X, 0x%08X", p_evlog->state, dirty_value);
 }
 
 // Use something like this when you want to log activity between boot events.
@@ -132,13 +143,11 @@ void IRAM_OPTION evlog_init(bool force) {
 //     evlog_restart(EVLOG_NOZERO_COOKIE | 1);
 
 void IRAM_OPTION evlog_restart(uint32_t state) {
-    if (is_inited()) {
-        evlog_clear_log();
-        evlog_set_state(state);
-        EVLOG1(">>> EvLog Restarted <<<");
-    } else {
-        evlog_init(false);
-    }
+    uint32_t dirty_value = evlog_init();
+    evlog_clear_log();
+    evlog_set_state(state);
+    EVLOG3(">>> EvLog Restarted <<< 0x%08X, 0x%08X", state, dirty_value);
+    return;
 }
 
 bool IRAM_OPTION evlog_is_enable(void) {
@@ -154,7 +163,7 @@ bool IRAM_OPTION evlog_is_enable(void) {
 #ifdef EVLOG_CIRCULAR
 #if (EVLOG_ARG4 == 4)
 uint32_t IRAM_OPTION evlog_event4(const char *fmt, uint32_t data0, uint32_t data1, uint32_t data2) {
-  evlog_init(false);
+  evlog_init();
 
   if (evlog_is_enable()) {
       uint32_t num = p_evlog->num;
@@ -185,7 +194,7 @@ uint32_t IRAM_OPTION evlog_event4(const char *fmt, uint32_t data0, uint32_t data
 
 #else
 uint32_t IRAM_OPTION evlog_event2(const char *fmt, uint32_t data0) {
-    evlog_init(false);
+    evlog_init();
 
     if (evlog_is_enable()) {
         uint32_t num = p_evlog->num;
@@ -208,7 +217,7 @@ uint32_t IRAM_OPTION evlog_event2(const char *fmt, uint32_t data0) {
 #else // Linear log and stop
 #if (EVLOG_ARG4 == 4)
 uint32_t IRAM_OPTION evlog_event4(const char *fmt, uint32_t data0, uint32_t data1, uint32_t data2) {
-    evlog_init(false);
+    evlog_init();
 
     if (evlog_is_enable()) {
         uint32_t num = p_evlog->num;
@@ -241,7 +250,7 @@ uint32_t IRAM_OPTION evlog_event2(const char *fmt, uint32_t data) {
 
 #else
 uint32_t IRAM_OPTION evlog_event2(const char *fmt, uint32_t data) {
-    evlog_init(false);
+    evlog_init();
 
     if (evlog_is_enable()) {
         uint32_t num = p_evlog->num;
@@ -347,29 +356,29 @@ void evlogPrintReport(Print& out) {
         break;
 
     out.printf("  ");
-// #if (EVLOG_ARG4 == 4)
+#if (EVLOG_ARG4 == 4)
     if (isPstr(event.fmt)) {
 
-// #if (EVLOG_TIMESTAMP == EVLOG_TIMESTAMP_CLOCKCYCLES)
+#if (EVLOG_TIMESTAMP == EVLOG_TIMESTAMP_CLOCKCYCLES)
         uint32_t fraction = event.ts;
         fraction /= clockCyclesPerMicrosecond();
         time_t gtime = (time_t)(fraction / 1000000U);
         fraction %= 1000000;
         const char *ts_fmt = PSTR("%s.%06u: ");
-// #elif (EVLOG_TIMESTAMP == EVLOG_TIMESTAMP_MICROS)
-//         uint32_t fraction = event.ts;
-//         time_t gtime = (time_t)(fraction / 1000000U);
-//         fraction %= 1000000;
-//         const char *ts_fmt = PSTR("%s.%06u: ");
-// #elif (EVLOG_TIMESTAMP == EVLOG_TIMESTAMP_MILLIS)
-//         uint32_t fraction = event.ts;
-//         time_t gtime = (time_t)(fraction / 1000U);
-//         fraction %= 1000U;
-//         const char *ts_fmt = PSTR("%s.%03u: ");
-// #endif
-// #if (EVLOG_TIMESTAMP == EVLOG_TIMESTAMP_CLOCKCYCLES) || \
-//     (EVLOG_TIMESTAMP == EVLOG_TIMESTAMP_MICROS) || \
-//     (EVLOG_TIMESTAMP == EVLOG_TIMESTAMP_MILLIS)
+#elif (EVLOG_TIMESTAMP == EVLOG_TIMESTAMP_MICROS)
+        uint32_t fraction = event.ts;
+        time_t gtime = (time_t)(fraction / 1000000U);
+        fraction %= 1000000;
+        const char *ts_fmt = PSTR("%s.%06u: ");
+#elif (EVLOG_TIMESTAMP == EVLOG_TIMESTAMP_MILLIS)
+        uint32_t fraction = event.ts;
+        time_t gtime = (time_t)(fraction / 1000U);
+        fraction %= 1000U;
+        const char *ts_fmt = PSTR("%s.%03u: ");
+#endif
+#if (EVLOG_TIMESTAMP == EVLOG_TIMESTAMP_CLOCKCYCLES) || \
+    (EVLOG_TIMESTAMP == EVLOG_TIMESTAMP_MICROS) || \
+    (EVLOG_TIMESTAMP == EVLOG_TIMESTAMP_MILLIS)
         struct tm *tv = gmtime(&gtime);
         char buf[10];
         if (strftime(buf, sizeof(buf), "%T", tv) > 0) {
@@ -377,20 +386,20 @@ void evlogPrintReport(Print& out) {
         } else {
             out.print(F("--->>> "));
         }
-// #endif
+#endif
 
         out.printf_P(event.fmt, event.data[0], event.data[1], event.data[2]);
     } else {
         out.printf_P("< ? >, 0x%08X, 0x%08X, 0x%08X, 0x%08X",
            (uint32_t)event.fmt, event.data[0], event.data[1], event.data[2]);
     }
-// #else   // EVLOG_ARG4 != 4
-//     if (isPstr(event.fmt)) {
-//       out.printf_P(event.fmt, event.data[0]);
-//     } else {
-//       out.printf_P("< ? >, 0x%08X, 0x%08X", event.fmt, event.data[0]);
-//     }
-// #endif
+#else   // EVLOG_ARG4 != 4
+    if (isPstr(event.fmt)) {
+      out.printf_P(event.fmt, event.data[0]);
+    } else {
+      out.printf_P("< ? >, 0x%08X, 0x%08X", event.fmt, event.data[0]);
+    }
+#endif
     out.println();
   }
 

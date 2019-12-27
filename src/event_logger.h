@@ -71,7 +71,9 @@ typedef struct _EVENT_LOG_ENTRY {
 #endif
 } evlog_entry_t;
 
-void evlog_init(bool force);
+uint32_t evlog_init(void);
+void evlog_preinit(void);
+void evlog_restart(uint32_t state);
 bool evlog_is_enable(void);
 uint32_t evlog_set_state(uint32_t enable);
 uint32_t evlog_get_state(void);
