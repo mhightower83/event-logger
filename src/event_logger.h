@@ -106,7 +106,8 @@ bool evlog_get_event(evlog_entry_t *entry, bool first);
 #endif
 
 #ifdef Print_h
-void evlogPrintReport(Print& out);
+// void evlogPrintReport(Print& out);
+void evlogPrintReport(Print& out, bool bLocalTime = false);
 #endif
 
 #define EVLOG4_P(fmt, val0, val1, val2) evlog_event4((fmt), (uint32_t)(val0), (uint32_t)(val1), (uint32_t)(val2))
@@ -133,7 +134,12 @@ void evlogPrintReport(Print& out);
 #endif
 #ifdef Print_h
 #ifndef evlogPrintReport
-#define evlogPrintReport(out) do{}while(false)
+// #define evlogPrintReport(out) do{}while(false)
+inline __attribute__((__always_inline__))
+void evlogPrintReport(Print& out, bool bLocalTime = false) {
+  (void)out;
+  (void)bLocalTime;
+}
 #endif
 #endif
 #ifndef EVLOG4

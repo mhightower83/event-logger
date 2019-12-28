@@ -117,30 +117,33 @@ void ICACHE_RAM_ATTR flash_addr_match_stats(uint32_t addr, uint32_t size, bool w
 #define ROM_SPIEraseSector  0x40004a00U
 #ifdef ROM_SPIEraseSector
 typedef int (*fp_SPIEraseSector_t)(uint32_t sector);
+constexpr fp_SPIEraseSector_t real_SPIEraseSector = (fp_SPIEraseSector_t)ROM_SPIEraseSector;
 
 int ICACHE_RAM_ATTR SPIEraseSector(uint32_t sector) {
     init_flash_stats();
-    int err = ((fp_SPIEraseSector_t)ROM_SPIEraseSector)(sector);
+    int err = real_SPIEraseSector(sector);
     EVLOG3("%d = SPIEraseSector(0x%04X)", err, sector);
     return err;
 }
 #endif
 
 
-#define ROM_SPIEraseBlock   0x400049b4U
+// #define ROM_SPIEraseBlock   0x400049b4U
 #ifdef ROM_SPIEraseBlock
 typedef int (*fp_SPIEraseBlock_t)(uint32_t block);
+constexpr fp_SPIEraseBlock_t real_SPIEraseBlock = (fp_SPIEraseBlock_t)ROM_SPIEraseBlock;
 
 int ICACHE_RAM_ATTR SPIEraseBlock(uint32_t block) {
     EVLOG2("SPIEraseBlock(0x%04X)", block);
-    return ((fp_SPIEraseBlock_t)ROM_SPIEraseBlock)(block);
+    return real_SPIEraseBlock(block);
 }
 #endif
 
 
-#define ROM_SPIRead         0x40004b1cU
+// #define ROM_SPIRead         0x40004b1cU
 #ifdef ROM_SPIRead
 typedef int (*fp_SPIRead_t)(uint32_t addr, void *dest, size_t size);
+constexpr fp_SPIRead_t real_SPIRead = (fp_SPIRead_t)ROM_SPIRead;
 
 int ICACHE_RAM_ATTR SPIRead(uint32_t addr, void *dest, size_t size) {
   if (spoof_init_data && size == 128) {
@@ -152,13 +155,8 @@ int ICACHE_RAM_ATTR SPIRead(uint32_t addr, void *dest, size_t size) {
         EVLOG2("  *** Non phy_init_data sector, 0x%08X, read with spoof_init_data true", addr);
       }
   }
-  // if (flash_log.one_shot) {
-  //   flash_log.one_shot = false;
-  //   // Either of these will cause a crash
-  //   // uart_div_modify(0, UART_CLK_FREQ / (115200));
-  //   // system_set_os_print(0);
-  // }
-  int err = ((fp_SPIRead_t)ROM_SPIRead)(addr, dest, size);
+
+  int err = real_SPIRead(addr, dest, size);
   flash_addr_match_stats(addr, size, Read, err);
   return err;
 }
@@ -168,33 +166,37 @@ int ICACHE_RAM_ATTR SPIRead(uint32_t addr, void *dest, size_t size) {
 #define ROM_SPIWrite        0x40004a4cU
 #ifdef ROM_SPIWrite
 typedef int (*fp_SPIWrite_t)(uint32_t addr, void *src, size_t size);
+constexpr fp_SPIWrite_t real_SPIWrite = (fp_SPIWrite_t)ROM_SPIWrite;
 
 int ICACHE_RAM_ATTR SPIWrite(uint32_t addr, void *src, size_t size) {
-  int err = ((fp_SPIWrite_t)ROM_SPIWrite)(addr, src, size);
+  int err = real_SPIWrite(addr, src, size);
   flash_addr_match_stats(addr, size, Write, err);
   return err;
 }
 #endif
 
 
-#define ROM_SPIParamCfg 0x40004c2c
+// #define ROM_SPIParamCfg 0x40004c2c
 #ifdef ROM_SPIParamCfg
 typedef uint32_t (*fp_SPIParamCfg_t)(uint32_t deviceId, uint32_t chip_size, uint32_t block_size, uint32_t sector_size, uint32_t page_size, uint32_t status_mask);
+constexpr fp_SPIParamCfg_t real_SPIParamCfg = (fp_SPIParamCfg_t)ROM_SPIParamCfg;
 
 uint32_t ICACHE_RAM_ATTR SPIParamCfg(uint32_t deviceId, uint32_t chip_size, uint32_t block_size, uint32_t sector_size, uint32_t page_size, uint32_t status_mask) {
   EVLOG2("SPIParamCfg SZ=%u", chip_size);
-  return ((fp_SPIParamCfg_t)ROM_SPIParamCfg)(deviceId, chip_size, block_size, sector_size, page_size, status_mask);
+  return real_SPIParamCfg(deviceId, chip_size, block_size, sector_size, page_size, status_mask);
 }
 #endif
 
 
-#define ROM_FlashDwnLdParamCfgMsgProc 0x4000368c
+// #define ROM_FlashDwnLdParamCfgMsgProc 0x4000368c
 #ifdef ROM_FlashDwnLdParamCfgMsgProc
 typedef int (*fp_FlashDwnLdParamCfgMsgProc_t)(uint32_t a, uint32_t b);
+constexpr fp_FlashDwnLdParamCfgMsgProc_t real_FlashDwnLdParamCfgMsgProc =
+                 (fp_FlashDwnLdParamCfgMsgProc_t)ROM_FlashDwnLdParamCfgMsgProc;
 
 int ICACHE_RAM_ATTR FlashDwnLdParamCfgMsgProc(uint32_t a, uint32_t b) {
   EVLOG1("FlashDwnLdParamCfgMsgProc");
-  return ((fp_FlashDwnLdParamCfgMsgProc_t)ROM_FlashDwnLdParamCfgMsgProc)(a, b);
+  return real_FlashDwnLdParamCfgMsgProc(a, b);
 }
 #endif
 

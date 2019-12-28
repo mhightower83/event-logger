@@ -46,7 +46,7 @@ typedef struct ESP_FLASH_LOG {
 extern esp_flash_log_t flash_log;
 
 void ICACHE_RAM_ATTR init_flash_stats(void);
-// void ICACHE_RAM_ATTR flash_addr_match_stats(uint32_t addr, uint32_t size, bool write, int err);
+void ICACHE_RAM_ATTR flash_addr_match_stats(uint32_t addr, uint32_t size, bool write, int err);
 void ICACHE_RAM_ATTR update_spoof_init_data_flag(const bool value);
 void ICACHE_RAM_ATTR preinit_flash_stats(void);
 
