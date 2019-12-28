@@ -140,7 +140,7 @@ int ICACHE_RAM_ATTR SPIEraseBlock(uint32_t block) {
 #endif
 
 
-// #define ROM_SPIRead         0x40004b1cU
+#define ROM_SPIRead         0x40004b1cU
 #ifdef ROM_SPIRead
 typedef int (*fp_SPIRead_t)(uint32_t addr, void *dest, size_t size);
 constexpr fp_SPIRead_t real_SPIRead = (fp_SPIRead_t)ROM_SPIRead;
