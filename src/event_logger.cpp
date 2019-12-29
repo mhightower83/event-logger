@@ -85,18 +85,15 @@ static_assert((sizeof(evlog_t) <= umm_static_reserve_size), "MAX_EVENTS too larg
 static_assert((sizeof(evlog_t) + ((uint32_t)EVLOG_ADDR - 0x60001200U) <= 512U), "MAX_EVENTS too large. Total RTC Memory usage exceeds 512.");
 #endif
 
-#define MAKE_FN_NAME(x) evlog_event ## x
-#define FUNCTION_NAME(z) MAKE_FN_NAME(z)
+// Solution inspired by https://stackoverflow.com/a/1254012
+#define _STR_CAT(w, x) w ## x
+#define MK_NAME(y, z) _STR_CAT(y, z)
 
-//D #if 0 //def EVLOG_WITH_DRAM
-//D // static evlog_t EVLOG_ADDR_QUALIFIER * p_evlog __attribute__((section(".noinit")));
-//D constexpr evlog_t EVLOG_ADDR_QUALIFIER * p_evlog = (evlog_t EVLOG_ADDR_QUALIFIER *)umm_static_reserve_addr;
-//D #else
 constexpr evlog_t EVLOG_ADDR_QUALIFIER * p_evlog = (evlog_t EVLOG_ADDR_QUALIFIER *)EVLOG_ADDR;
 constexpr uint32_t k_cookie = ((uint32_t)p_evlog) << 1;
-//D #endif
 
-inline void IRAM_OPTION evlog_clear_log(void) {
+inline __attribute__((__always_inline__))
+void IRAM_OPTION clear_log(void) {
     uint32_t cookie = p_evlog->cookie;
 
     for (size_t i=0; i<(sizeof(evlog_t)/sizeof(int32_t)); i++)
@@ -105,8 +102,17 @@ inline void IRAM_OPTION evlog_clear_log(void) {
     p_evlog->cookie = cookie;
 }
 
-inline bool IRAM_OPTION is_inited(void) {
+void IRAM_OPTION evlog_clear(void) {
+    clear_log();
+}
+
+inline __attribute__((__always_inline__))
+bool IRAM_OPTION is_inited(void) {
     return (k_cookie == p_evlog->cookie);
+}
+
+bool IRAM_OPTION evlog_is_inited(void) {
+    return is_inited();
 }
 
 /*
@@ -138,7 +144,7 @@ uint32_t IRAM_OPTION evlog_set_state(uint32_t state) {
 uint32_t IRAM_OPTION evlog_init(void) {
     uint32_t dirty_value = (uint32_t)p_evlog;
     if (!is_inited()) {
-        evlog_clear_log();
+        clear_log();
         // A unique value to indicate log buffer was initialized
         p_evlog->cookie = k_cookie;
     }
@@ -164,7 +170,7 @@ void IRAM_OPTION evlog_preinit(uint32_t new_state) {
         EVLOG4(">>> EvLog Resumed <<< state(0x%08X), cookie(0x%08X), p_evlog(0x%08X))", p_evlog->state, p_evlog->cookie, dirty_value);
         return;
     }
-    evlog_clear_log();
+    clear_log();
     evlog_set_state(new_state);
     EVLOG4(">>> EvLog Inited <<< state(0x%08X), cookie(0x%08X), p_evlog(0x%08X)", p_evlog->state, p_evlog->cookie, dirty_value);
 }
@@ -179,7 +185,7 @@ void IRAM_OPTION evlog_preinit(uint32_t new_state) {
 
 void IRAM_OPTION evlog_restart(uint32_t state) {
     uint32_t dirty_value = evlog_init();
-    evlog_clear_log();
+    clear_log();
     evlog_set_state(state);
     EVLOG4(">>> EvLog Restarted <<< state(0x%08X), cookie(0x%08X), p_evlog(0x%08X)", state, p_evlog->cookie, dirty_value);
     return;
@@ -199,7 +205,7 @@ bool IRAM_OPTION evlog_is_enable(void) {
 #ifdef EVLOG_CIRCULAR
 
 // uint32_t IRAM_OPTION evlog_event5(const char *fmt, uint32_t data0
-uint32_t IRAM_OPTION FUNCTION_NAME(EVLOG_TOTAL_ARGS)(const char *fmt, uint32_t data0
+uint32_t IRAM_OPTION MK_NAME(evlog_event, EVLOG_TOTAL_ARGS)(const char *fmt, uint32_t data0
 
 #if (EVLOG_TOTAL_ARGS > 2)
       , uint32_t data1
@@ -252,7 +258,7 @@ uint32_t IRAM_OPTION FUNCTION_NAME(EVLOG_TOTAL_ARGS)(const char *fmt, uint32_t d
 // Should look something like this when done
 //uint32_t IRAM_OPTION evlog_event5(const char *fmt, uint32_t data0, uint32_t data1, uint32_t data2, uint32_t data3)
 
-uint32_t IRAM_OPTION FUNCTION_NAME(EVLOG_TOTAL_ARGS)(const char *fmt, uint32_t data0
+uint32_t IRAM_OPTION MK_NAME(evlog_event, EVLOG_TOTAL_ARGS)(const char *fmt, uint32_t data0
 // uint32_t IRAM_OPTION evlog_event5(const char *fmt, uint32_t data0
 
 #if (EVLOG_TOTAL_ARGS > 2)

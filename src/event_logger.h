@@ -58,6 +58,7 @@ extern "C" {
 #define EVLOG_COOKIE_MASK (~EVLOG_ENABLE_MASK)
 // #define EVLOG_INIT_MASK (0x0FFU<<8)
 
+// EVLOG_TOTAL_ARGS can range from 2 to 5
 #define EVLOG_TOTAL_ARGS 5
 #define EVLOG_DATA_MAX ((size_t)EVLOG_TOTAL_ARGS - 1U)
 
@@ -75,10 +76,23 @@ uint32_t evlog_init(void);
 void evlog_preinit(uint32_t new_state);
 void evlog_restart(uint32_t state);
 bool evlog_is_enable(void);
+bool evlog_is_inited(void);
+void evlog_clear(void);
 uint32_t evlog_set_state(uint32_t enable);
 uint32_t evlog_get_state(void);
 uint32_t evlog_get_count(void);
 void evlog_restart(uint32_t state);
+
+inline __attribute__((__always_inline__))
+uint32_t evlog_stop(void) {
+  return evlog_set_state(evlog_get_state() & ~EVLOG_ENABLE_MASK);
+}
+
+inline __attribute__((__always_inline__))
+uint32_t evlog_start(void) {
+  return evlog_set_state(evlog_get_state() | 1);
+}
+
 
 #if   (EVLOG_TOTAL_ARGS == 5)
 uint32_t evlog_event5(const char *fmt, uint32_t data0, uint32_t data1, uint32_t data2, uint32_t data3);
