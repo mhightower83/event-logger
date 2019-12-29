@@ -64,6 +64,7 @@ extern "C" {
 #define EVLOG_ADDR_SZ ((uint32_t)128 - 32U - 5U)  // USER_RTC - EBOOT - sizeof(num and state) - sizeof(bool?)
 #endif
 
+
 #ifndef MAX_EVENTS
 #define MAX_EVENTS (EVLOG_ADDR_SZ/(sizeof(evlog_entry_t)/sizeof(uint32_t))) //(47)
 #endif
@@ -71,9 +72,8 @@ extern "C" {
 typedef struct _EVLOG_STRUCT evlog_t;
 
 struct _EVLOG_STRUCT {
-    // evlog_t *uint32_t this_evlog;
-    uint32_t cookie;
-    uint32_t num;
+    uintptr_t cookie; // Must be 1st and
+    uint32_t num;     // must be 2nd. If changed, clear_log must be updated!
     uint32_t state;
     evlog_entry_t event[MAX_EVENTS];
     bool wrapped;
@@ -89,17 +89,22 @@ static_assert((sizeof(evlog_t) + ((uint32_t)EVLOG_ADDR - 0x60001200U) <= 512U), 
 #define _STR_CAT(w, x) w ## x
 #define MK_NAME(y, z) _STR_CAT(y, z)
 
+constexpr uint32_t EVLOG_ADDR_QUALIFIER *pu32_evlog_addr = EVLOG_ADDR;
 constexpr evlog_t EVLOG_ADDR_QUALIFIER * p_evlog = (evlog_t EVLOG_ADDR_QUALIFIER *)EVLOG_ADDR;
-constexpr uint32_t k_cookie = ((uint32_t)p_evlog) << 1;
+constexpr uintptr_t k_cookie = (((uintptr_t)p_evlog) << 1 | 1);
 
 inline __attribute__((__always_inline__))
 void IRAM_OPTION clear_log(void) {
-    uint32_t cookie = p_evlog->cookie;
-
+#if 1
+    // cookie must be 1st element in structure and num 2nd.
+    ets_memset(&p_evlog->num, 0, sizeof(evlog_t) - sizeof(p_evlog->cookie));
+#else
+    uintptr_t cookie = p_evlog->cookie;
     for (size_t i=0; i<(sizeof(evlog_t)/sizeof(int32_t)); i++)
-        EVLOG_ADDR[i]=0;
+        pu32_evlog_addr[i]=0;
 
     p_evlog->cookie = cookie;
+#endif
 }
 
 void IRAM_OPTION evlog_clear(void) {
@@ -116,7 +121,6 @@ bool IRAM_OPTION evlog_is_inited(void) {
 }
 
 /*
-  get the current
 */
 uint32_t IRAM_OPTION evlog_get_state(void) {
     if (is_inited())
@@ -140,6 +144,8 @@ uint32_t IRAM_OPTION evlog_set_state(uint32_t state) {
   it is invalid, either we were just powered on, in deep power save (PD pin was
   held low), or we just came out of deep sleep. Either way we need to initialize
   the log buffer.
+
+  TODO: tracking and logging previous value of p_evlog is unecessary once pass early development phase.
 */
 uint32_t IRAM_OPTION evlog_init(void) {
     uint32_t dirty_value = (uint32_t)p_evlog;
