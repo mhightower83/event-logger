@@ -71,7 +71,8 @@ extern "C" {
 typedef struct _EVLOG_STRUCT evlog_t;
 
 struct _EVLOG_STRUCT {
-    evlog_t * this_evlog;
+    // evlog_t *uint32_t this_evlog;
+    uint32_t cookie;
     uint32_t num;
     uint32_t state;
     evlog_entry_t event[MAX_EVENTS];
@@ -92,23 +93,25 @@ static_assert((sizeof(evlog_t) + ((uint32_t)EVLOG_ADDR - 0x60001200U) <= 512U), 
 //D constexpr evlog_t EVLOG_ADDR_QUALIFIER * p_evlog = (evlog_t EVLOG_ADDR_QUALIFIER *)umm_static_reserve_addr;
 //D #else
 constexpr evlog_t EVLOG_ADDR_QUALIFIER * p_evlog = (evlog_t EVLOG_ADDR_QUALIFIER *)EVLOG_ADDR;
+constexpr uint32_t k_cookie = ((uint32_t)p_evlog) << 1;
 //D #endif
 
 inline void IRAM_OPTION evlog_clear_log(void) {
-    evlog_t *save_ev = p_evlog->this_evlog;
+    uint32_t cookie = p_evlog->cookie;
 
     for (size_t i=0; i<(sizeof(evlog_t)/sizeof(int32_t)); i++)
         EVLOG_ADDR[i]=0;
 
-    p_evlog->this_evlog = save_ev;
+    p_evlog->cookie = cookie;
 }
 
 inline bool IRAM_OPTION is_inited(void) {
-  // return ((evlog_t EVLOG_ADDR_QUALIFIER *)EVLOG_ADDR == p_evlog);
-  // return ((uint32_t)EVLOG_ADDR == (uint32_t)p_evlog) && //;
-  return        ((uint32_t)p_evlog == (uint32_t)p_evlog->this_evlog);
+    return (k_cookie == p_evlog->cookie);
 }
 
+/*
+  get the current
+*/
 uint32_t IRAM_OPTION evlog_get_state(void) {
     if (is_inited())
         return p_evlog->state;
@@ -127,7 +130,7 @@ uint32_t IRAM_OPTION evlog_set_state(uint32_t state) {
   Our block of memory lives outside the normal "C" runtime initialization stuff.
   We need to detect when its bad and zero it.
 
-  `p_evlog->this_evlog` is our flag that memory has been initialized by us. If
+  `p_evlog->cookie` is our flag that memory has been initialized by us. If
   it is invalid, either we were just powered on, in deep power save (PD pin was
   held low), or we just came out of deep sleep. Either way we need to initialize
   the log buffer.
@@ -135,9 +138,9 @@ uint32_t IRAM_OPTION evlog_set_state(uint32_t state) {
 uint32_t IRAM_OPTION evlog_init(void) {
     uint32_t dirty_value = (uint32_t)p_evlog;
     if (!is_inited()) {
-        //D p_evlog = (evlog_t EVLOG_ADDR_QUALIFIER *)EVLOG_ADDR;
         evlog_clear_log();
-        p_evlog->this_evlog = p_evlog;
+        // A unique value to indicate log buffer was initialized
+        p_evlog->cookie = k_cookie;
     }
     return dirty_value;
 }
@@ -158,12 +161,12 @@ void IRAM_OPTION evlog_preinit(uint32_t new_state) {
             p_evlog->num = MAX_EVENTS; // Make it a valid value number, log full.
             // Should never occur; however, this will allow for recovery of
             // log in some broken situations.
-        EVLOG3(">>> EvLog Resumed <<< 0x%08X, 0x%08X", p_evlog->state, dirty_value);
+        EVLOG4(">>> EvLog Resumed <<< state(0x%08X), cookie(0x%08X), p_evlog(0x%08X))", p_evlog->state, p_evlog->cookie, dirty_value);
         return;
     }
     evlog_clear_log();
     evlog_set_state(new_state);
-    EVLOG3(">>> EvLog Inited <<< 0x%08X, 0x%08X", p_evlog->state, dirty_value);
+    EVLOG4(">>> EvLog Inited <<< state(0x%08X), cookie(0x%08X), p_evlog(0x%08X)", p_evlog->state, p_evlog->cookie, dirty_value);
 }
 
 /*
@@ -178,7 +181,7 @@ void IRAM_OPTION evlog_restart(uint32_t state) {
     uint32_t dirty_value = evlog_init();
     evlog_clear_log();
     evlog_set_state(state);
-    EVLOG3(">>> EvLog Restarted <<< 0x%08X, 0x%08X", state, dirty_value);
+    EVLOG4(">>> EvLog Restarted <<< state(0x%08X), cookie(0x%08X), p_evlog(0x%08X)", state, p_evlog->cookie, dirty_value);
     return;
 }
 
@@ -195,8 +198,8 @@ bool IRAM_OPTION evlog_is_enable(void) {
 
 #ifdef EVLOG_CIRCULAR
 
-uint32_t IRAM_OPTION FUNCTION_NAME(EVLOG_TOTAL_ARGS)(const char *fmt, uint32_t data0
 // uint32_t IRAM_OPTION evlog_event5(const char *fmt, uint32_t data0
+uint32_t IRAM_OPTION FUNCTION_NAME(EVLOG_TOTAL_ARGS)(const char *fmt, uint32_t data0
 
 #if (EVLOG_TOTAL_ARGS > 2)
       , uint32_t data1
