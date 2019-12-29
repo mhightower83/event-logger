@@ -58,12 +58,12 @@ extern "C" {
 #define EVLOG_COOKIE_MASK (~EVLOG_ENABLE_MASK)
 // #define EVLOG_INIT_MASK (0x0FFU<<8)
 
-#define EVLOG_ARG4 4
-#define EVLOG_ARGS_MAX ((size_t)EVLOG_ARG4 - 1U)
+#define EVLOG_TOTAL_ARGS 5
+#define EVLOG_DATA_MAX ((size_t)EVLOG_TOTAL_ARGS - 1U)
 
 typedef struct _EVENT_LOG_ENTRY {
     const char *fmt;
-    uint32_t data[EVLOG_ARGS_MAX];
+    uint32_t data[EVLOG_DATA_MAX];
 #if (EVLOG_TIMESTAMP == EVLOG_TIMESTAMP_CLOCKCYCLES) || \
     (EVLOG_TIMESTAMP == EVLOG_TIMESTAMP_MICROS) || \
     (EVLOG_TIMESTAMP == EVLOG_TIMESTAMP_MILLIS)
@@ -72,7 +72,7 @@ typedef struct _EVENT_LOG_ENTRY {
 } evlog_entry_t;
 
 uint32_t evlog_init(void);
-void evlog_preinit(void);
+void evlog_preinit(uint32_t new_state);
 void evlog_restart(uint32_t state);
 bool evlog_is_enable(void);
 uint32_t evlog_set_state(uint32_t enable);
@@ -80,23 +80,67 @@ uint32_t evlog_get_state(void);
 uint32_t evlog_get_count(void);
 void evlog_restart(uint32_t state);
 
-#if (EVLOG_ARG4 == 4)
+#if   (EVLOG_TOTAL_ARGS == 5)
+uint32_t evlog_event5(const char *fmt, uint32_t data0, uint32_t data1, uint32_t data2, uint32_t data3);
+#elif (EVLOG_TOTAL_ARGS == 4)
 uint32_t evlog_event4(const char *fmt, uint32_t data0, uint32_t data1, uint32_t data2);
-uint32_t evlog_event2(const char *fmt, uint32_t data);
-// inline __attribute__((__always_inline__))
-// uint32_t evlog_event2(const char *fmt, uint32_t data) {
-//   return evlog_event4(fmt, data, 0, 0);
-// }
-
+#elif (EVLOG_TOTAL_ARGS == 3)
+uint32_t evlog_event3(const char *fmt, uint32_t data0, uint32_t data1);
+#elif (EVLOG_TOTAL_ARGS == 2)
+uint32_t evlog_event2(const char *fmt, uint32_t data0, uint32_t data1);
+#elif (EVLOG_TOTAL_ARGS == 1)
+uint32_t evlog_event1(const char *fmt, uint32_t data);
 #else
-uint32_t evlog_event2(const char *fmt, uint32_t data);
+#endif
 
+#if (EVLOG_TOTAL_ARGS > 4)
 inline __attribute__((__always_inline__))
 uint32_t evlog_event4(const char *fmt, uint32_t data0, uint32_t data1, uint32_t data2) {
-  (void)data1;
-  (void)data2;
-  return evlog_event2(fmt, data0);
+  return evlog_event5(fmt, data0, data1, data2, 0);
 }
+#define EVLOG5_P(fmt, val0, val1, val2, val3) evlog_event5((fmt), (uint32_t)(val0), (uint32_t)(val1), (uint32_t)(val2), (uint32_t)(val3))
+#endif
+
+#if (EVLOG_TOTAL_ARGS > 3)
+inline __attribute__((__always_inline__))
+uint32_t evlog_event3(const char *fmt, uint32_t data0, uint32_t data1) {
+  return evlog_event4(fmt, data0, data1, 0);
+}
+#define EVLOG4_P(fmt, val0, val1, val2) evlog_event4((fmt), (uint32_t)(val0), (uint32_t)(val1), (uint32_t)(val2))
+#endif
+
+#if (EVLOG_TOTAL_ARGS > 2)
+inline __attribute__((__always_inline__))
+uint32_t evlog_event2(const char *fmt, uint32_t data0) {
+  return evlog_event3(fmt, data0, 0);
+}
+#define EVLOG3_P(fmt, val0, val1) evlog_event3((fmt), (val0), (val1))
+#endif
+
+#if (EVLOG_TOTAL_ARGS > 1)
+inline __attribute__((__always_inline__))
+uint32_t evlog_event1(const char *fmt) {
+  return evlog_event2(fmt, 0);
+}
+#define EVLOG2_P(fmt, val0) evlog_event2((fmt), (val0))
+#endif
+
+#define EVLOG1_P(fmt) evlog_event1(fmt)
+
+#if (EVLOG_TOTAL_ARGS <= 1)
+#define EVLOG2_P(fmt, d0) EVLOG1_P((fmt))
+#endif
+
+#if (EVLOG_TOTAL_ARGS <= 2)
+#define EVLOG3_P(fmt, d0, d1) EVLOG2_P((fmt), (uint32_t)(d0))
+#endif
+
+#if (EVLOG_TOTAL_ARGS <= 3)
+#define EVLOG4_P(fmt, d0, d1, d2) EVLOG3_P((fmt), (uint32_t)(d0), (uint32_t)(d1))
+#endif
+
+#if (EVLOG_TOTAL_ARGS <= 4)
+#define EVLOG5_P(fmt, d0, d1, d2, d3) EVLOG4_P((fmt), (uint32_t)(d0), (uint32_t)(d1), (uint32_t)(d2))
 #endif
 
 bool evlog_get_event(evlog_entry_t *entry, bool first);
@@ -110,19 +154,10 @@ bool evlog_get_event(evlog_entry_t *entry, bool first);
 void evlogPrintReport(Print& out, bool bLocalTime = false);
 #endif
 
-#define EVLOG4_P(fmt, val0, val1, val2) evlog_event4((fmt), (uint32_t)(val0), (uint32_t)(val1), (uint32_t)(val2))
+#define EVLOG5(fmt, val0, val1, val2, val3)  EVLOG5_P(PSTR(fmt), (val0), (val1), (val2), (val3))
 #define EVLOG4(fmt, val0, val1, val2)  EVLOG4_P(PSTR(fmt), (val0), (val1), (val2))
-
-#define EVLOG3_P(fmt, val0, val1) EVLOG4_P((fmt), (val0), (val1), 0)
 #define EVLOG3(fmt, val0, val1)  EVLOG3_P(PSTR(fmt), (val0), (val1))
-
-#define EVLOG2_P(fmt, val0) EVLOG3_P((fmt), (val0), 0)
 #define EVLOG2(fmt, val0) EVLOG2_P(PSTR(fmt), (val0))
-//
-// #define EVLOG2_P(fmt, val0) EVLOG4_P((fmt), (val0), 0, 0)
-// #define EVLOG2(fmt, val0) EVLOG4_P(PSTR(fmt), (val0), 0, 0)
-
-#define EVLOG1_P(fmt) EVLOG2_P(fmt, 0)
 #define EVLOG1(fmt) EVLOG1_P(PSTR(fmt))
 
 #else // ! ENABLE_EVLOG
@@ -141,6 +176,10 @@ void evlogPrintReport(Print& out, bool bLocalTime = false) {
   (void)bLocalTime;
 }
 #endif
+#endif
+#ifndef EVLOG5
+#define EVLOG5_P(fmt, val0, val1, val2, val3) do{}while(false)
+#define EVLOG5(fmt, val0, val1, val2, val3) do{}while(false)
 #endif
 #ifndef EVLOG4
 #define EVLOG4_P(fmt, val0, val1, val2) do{}while(false)

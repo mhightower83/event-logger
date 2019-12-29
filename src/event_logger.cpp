@@ -84,6 +84,9 @@ static_assert((sizeof(evlog_t) <= umm_static_reserve_size), "MAX_EVENTS too larg
 static_assert((sizeof(evlog_t) + ((uint32_t)EVLOG_ADDR - 0x60001200U) <= 512U), "MAX_EVENTS too large. Total RTC Memory usage exceeds 512.");
 #endif
 
+#define MAKE_FN_NAME(x) evlog_event ## x
+#define FUNCTION_NAME(z) MAKE_FN_NAME(z)
+
 //D #if 0 //def EVLOG_WITH_DRAM
 //D // static evlog_t EVLOG_ADDR_QUALIFIER * p_evlog __attribute__((section(".noinit")));
 //D constexpr evlog_t EVLOG_ADDR_QUALIFIER * p_evlog = (evlog_t EVLOG_ADDR_QUALIFIER *)umm_static_reserve_addr;
@@ -119,16 +122,35 @@ uint32_t IRAM_OPTION evlog_set_state(uint32_t state) {
     return previous;
 }
 
+
+/*
+  Our block of memory lives outside the normal "C" runtime initialization stuff.
+  We need to detect when its bad and zero it.
+
+  `p_evlog->this_evlog` is our flag that memory has been initialized by us. If
+  it is invalid, either we were just powered on, in deep power save (PD pin was
+  held low), or we just came out of deep sleep. Either way we need to initialize
+  the log buffer.
+*/
 uint32_t IRAM_OPTION evlog_init(void) {
     uint32_t dirty_value = (uint32_t)p_evlog;
     if (!is_inited()) {
-        // p_evlog = (evlog_t EVLOG_ADDR_QUALIFIER *)EVLOG_ADDR;
+        //D p_evlog = (evlog_t EVLOG_ADDR_QUALIFIER *)EVLOG_ADDR;
+        evlog_clear_log();
         p_evlog->this_evlog = p_evlog;
     }
     return dirty_value;
 }
 
-void IRAM_OPTION evlog_preinit(void) {
+/*
+  Ideally this would be called before the NONSDK is called.
+  Asside from initial setup it marks the start of a new boot.
+  Good places to call from app_entry_redefinable() or preinit()
+
+  `new_state` is ignored if `EVLOG_NOZERO_COOKIE` is found. In this case EvLog
+  will continue operation with pre-existing state.
+*/
+void IRAM_OPTION evlog_preinit(uint32_t new_state) {
     uint32_t dirty_value = evlog_init();
     // If we are called early at boot time. When cookie is set don't zero memory
     if ((p_evlog->state & EVLOG_COOKIE_MASK) == EVLOG_NOZERO_COOKIE) {
@@ -140,14 +162,17 @@ void IRAM_OPTION evlog_preinit(void) {
         return;
     }
     evlog_clear_log();
-    evlog_set_state(1);
+    evlog_set_state(new_state);
     EVLOG3(">>> EvLog Inited <<< 0x%08X, 0x%08X", p_evlog->state, dirty_value);
 }
 
-// Use something like this when you want to log activity between boot events.
-// Place the line where needed to capture what you want to see before the
-// reboot command.
-//     evlog_restart(EVLOG_NOZERO_COOKIE | 1);
+/*
+  Use something like this when you want to log activity between boot events.
+  Place the line where needed to capture things you want to see before the
+  reboot command.
+
+      `evlog_restart(EVLOG_NOZERO_COOKIE | 1);`
+*/
 
 void IRAM_OPTION evlog_restart(uint32_t state) {
     uint32_t dirty_value = evlog_init();
@@ -167,9 +192,23 @@ bool IRAM_OPTION evlog_is_enable(void) {
     return false;
 }
 
+
 #ifdef EVLOG_CIRCULAR
-#if (EVLOG_ARG4 == 4)
-uint32_t IRAM_OPTION evlog_event4(const char *fmt, uint32_t data0, uint32_t data1, uint32_t data2) {
+
+uint32_t IRAM_OPTION FUNCTION_NAME(EVLOG_TOTAL_ARGS)(const char *fmt, uint32_t data0
+// uint32_t IRAM_OPTION evlog_event5(const char *fmt, uint32_t data0
+
+#if (EVLOG_TOTAL_ARGS > 2)
+      , uint32_t data1
+#endif
+#if (EVLOG_TOTAL_ARGS > 3)
+      , uint32_t data2
+#endif
+#if (EVLOG_TOTAL_ARGS > 4)
+      , uint32_t data3
+#endif
+
+) {
   evlog_init();
 
   if (evlog_is_enable()) {
@@ -181,8 +220,15 @@ uint32_t IRAM_OPTION evlog_event4(const char *fmt, uint32_t data0, uint32_t data
 
       p_evlog->event[num].fmt = fmt;
       p_evlog->event[num].data[0] = data0;
+#if (EVLOG_TOTAL_ARGS > 2)
       p_evlog->event[num].data[1] = data1;
+#endif
+#if (EVLOG_TOTAL_ARGS > 3)
       p_evlog->event[num].data[2] = data2;
+#endif
+#if (EVLOG_TOTAL_ARGS > 4)
+      p_evlog->event[num].data[3] = data3;
+#endif
 #if (EVLOG_TIMESTAMP == EVLOG_TIMESTAMP_CLOCKCYCLES)
       p_evlog->event[num].ts = esp_get_cycle_count();
 #elif (EVLOG_TIMESTAMP == EVLOG_TIMESTAMP_MICROS)
@@ -190,7 +236,6 @@ uint32_t IRAM_OPTION evlog_event4(const char *fmt, uint32_t data0, uint32_t data
 #elif (EVLOG_TIMESTAMP == EVLOG_TIMESTAMP_MILLIS)
       p_evlog->event[num].ts = millis();
 #endif
-
       p_evlog->num = ++num;
 
       return num;
@@ -199,31 +244,25 @@ uint32_t IRAM_OPTION evlog_event4(const char *fmt, uint32_t data0, uint32_t data
     return 0;
 }
 
-#else
-uint32_t IRAM_OPTION evlog_event2(const char *fmt, uint32_t data0) {
-    evlog_init();
-
-    if (evlog_is_enable()) {
-        uint32_t num = p_evlog->num;
-        if (num >= MAX_EVENTS) {
-            num = 0;
-            p_evlog->wrapped = true;
-        }
-
-        p_evlog->event[num].fmt = fmt;
-        p_evlog->event[num].data[0] = data0;
-        p_evlog->num = ++num;
-
-        return num;
-    }
-
-    return 0;
-}
-#endif
 
 #else // Linear log and stop
-#if (EVLOG_ARG4 == 4)
-uint32_t IRAM_OPTION evlog_event4(const char *fmt, uint32_t data0, uint32_t data1, uint32_t data2) {
+// Should look something like this when done
+//uint32_t IRAM_OPTION evlog_event5(const char *fmt, uint32_t data0, uint32_t data1, uint32_t data2, uint32_t data3)
+
+uint32_t IRAM_OPTION FUNCTION_NAME(EVLOG_TOTAL_ARGS)(const char *fmt, uint32_t data0
+// uint32_t IRAM_OPTION evlog_event5(const char *fmt, uint32_t data0
+
+#if (EVLOG_TOTAL_ARGS > 2)
+      , uint32_t data1
+#endif
+#if (EVLOG_TOTAL_ARGS > 3)
+      , uint32_t data2
+#endif
+#if (EVLOG_TOTAL_ARGS > 4)
+      , uint32_t data3
+#endif
+
+) {
     evlog_init();
 
     if (evlog_is_enable()) {
@@ -231,8 +270,15 @@ uint32_t IRAM_OPTION evlog_event4(const char *fmt, uint32_t data0, uint32_t data
         if (num < MAX_EVENTS) {
             p_evlog->event[num].fmt = fmt;
             p_evlog->event[num].data[0] = data0;
+#if (EVLOG_TOTAL_ARGS > 2)
             p_evlog->event[num].data[1] = data1;
+#endif
+#if (EVLOG_TOTAL_ARGS > 3)
             p_evlog->event[num].data[2] = data2;
+#endif
+#if (EVLOG_TOTAL_ARGS > 4)
+            p_evlog->event[num].data[3] = data3;
+#endif
 #if (EVLOG_TIMESTAMP == EVLOG_TIMESTAMP_CLOCKCYCLES)
             p_evlog->event[num].ts = esp_get_cycle_count();
 #elif (EVLOG_TIMESTAMP == EVLOG_TIMESTAMP_MICROS)
@@ -250,31 +296,6 @@ uint32_t IRAM_OPTION evlog_event4(const char *fmt, uint32_t data0, uint32_t data
 
     return 0;
 }
-
-uint32_t IRAM_OPTION evlog_event2(const char *fmt, uint32_t data) {
-  return evlog_event4(fmt, data, 0, 0);
-}
-
-#else
-uint32_t IRAM_OPTION evlog_event2(const char *fmt, uint32_t data) {
-    evlog_init();
-
-    if (evlog_is_enable()) {
-        uint32_t num = p_evlog->num;
-        if (num < MAX_EVENTS) {
-            p_evlog->event[num].fmt = fmt;
-            p_evlog->event[num].data[0] = data;
-            p_evlog->num = ++num;
-            return num;
-        } else {
-            p_evlog->state &= ~EVLOG_ENABLE_MASK;
-            p_evlog->wrapped = true;
-        }
-    }
-
-    return 0;
-}
-#endif
 #endif
 
 uint32_t evlog_get_count(void) {
@@ -385,7 +406,7 @@ bool isPstrFmt(const char *pStr) {
 #define EVLOG_TIMESTAMP_MILLIS        (1000U)
 
 void evlogPrintReport(Print& out, bool bLocalTime) {
-  out.println(F("Event Log Report"));
+  out.println(F("EvLog Report"));
 
   uint32_t count = 0;
   for (bool more = true; (more) && (count<MAX_EVENTS); count++) {
@@ -395,7 +416,6 @@ void evlogPrintReport(Print& out, bool bLocalTime) {
         break;
 
     out.printf("  ");
-#if (EVLOG_ARG4 == 4)
     if (isPstrFmt(event.fmt)) {
         (void)bLocalTime;
 #if (EVLOG_TIMESTAMP == EVLOG_TIMESTAMP_CLOCKCYCLES)
@@ -442,19 +462,22 @@ void evlogPrintReport(Print& out, bool bLocalTime) {
             out.print(F("--->>> "));
         }
 #endif
-
-        out.printf_P(event.fmt, event.data[0], event.data[1], event.data[2]);
-    } else {
-        out.printf_P("< ? >, 0x%08X, 0x%08X, 0x%08X, 0x%08X",
-           (uint32_t)event.fmt, event.data[0], event.data[1], event.data[2]);
-    }
-#else   // EVLOG_ARG4 != 4
-    if (isPstr(event.fmt)) {
-      out.printf_P(event.fmt, event.data[0]);
-    } else {
-      out.printf_P("< ? >, 0x%08X, 0x%08X", event.fmt, event.data[0]);
-    }
+        out.printf_P(event.fmt, event.data[0]
+#if (EVLOG_TOTAL_ARGS > 2)
+          , event.data[1]
 #endif
+#if (EVLOG_TOTAL_ARGS > 3)
+          , event.data[2]
+#endif
+#if (EVLOG_TOTAL_ARGS > 4)
+          , event.data[3]
+#endif
+        );
+    } else {
+        out.printf_P(PSTR("< ? >, 0x%08X"), (uint32_t)event.fmt);
+        for (size_t i=0; i<EVLOG_DATA_MAX ; i++)
+          out.printf(PSTR(", 0x%08X"), event.data[i]);
+    }
     out.println();
   }
 
