@@ -72,6 +72,7 @@ typedef struct _EVENT_LOG_ENTRY {
 #endif
 } evlog_entry_t;
 
+void enable_evlog_at_link_time(void)  __attribute__((noinline));
 uint32_t evlog_init(void);
 void evlog_preinit(uint32_t new_state);
 void evlog_restart(uint32_t state);

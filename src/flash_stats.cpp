@@ -50,31 +50,56 @@ esp_flash_log_t flash_log  __attribute__((section(".noinit")));
 static bool spoof_init_data = false;
 
 void ICACHE_RAM_ATTR update_spoof_init_data_flag(const bool value) {
-  spoof_init_data = value;
-  EVLOG2("spoof_init_data = %d", value);
+    spoof_init_data = value;
+    EVLOG2("spoof_init_data = %d", value);
 }
 
+/*
+  Calling preinit_flash_stats() from preinit(), will allow us to clear coounters
+  and start fresh with a new boot.
+*/
 void ICACHE_RAM_ATTR preinit_flash_stats(void) {
-  memset(&flash_log, 0, sizeof(flash_log));
-  // flash_log.one_shot = true;
-  flash_log.r_count.label = PSTR("%d = SPIRead (0x%08X, 0x%08X, %u)");
-  flash_log.w_count.label = PSTR("%d = SPIWrite(0x%08X, 0x%08X, %u)");
-  init_flash_stats();
+    memset(&flash_log, 0, sizeof(flash_log));
 }
 
 void ICACHE_RAM_ATTR init_flash_stats(void) { //const char *init_by, bool write) {
     volatile SpiFlashChip *fchip = flashchip;
     uint32_t chip_size = fchip->chip_size;
-    if (flash_log.chip_size == chip_size)
+    if (flash_log.chip_size == chip_size) {
       return;
+    } else {
+        if (0 == flash_log.chip_size)
+            EVLOG2("*** init_flash_stats(), chip_size %d", chip_size);
+        else
+            EVLOG3("*** init_flash_stats(), chip_size changed: old %d, new %d",  flash_log.chip_size, chip_size);
+        /*
+            We currently use the __attribute__((section(".noinit"))) on
+            flash_log this will give us a fresh start at flashchip config
+            changes. Note, we lose one SPIRead count that was done to get the
+            bin image configured flash size.
 
-    EVLOG4("*** init_flash_stats(), chip_size changed: old %d, new %d",  flash_log.chip_size, chip_size, 0);
+            An issue exist in that when the flash size does not change we will
+            not restart counters after a restart. This would best be addressed
+            by calling preinit_flash_stats() from preinit() or better yet
+            app_entry_redefinable(). Which is better, depends on what you are
+            trying to monitor and how early you need to get started.
+
+            If preinit_flash_stats() is called already at boot, this call can
+            be omitted.
+
+            TODO: Find a way to make this automatic.
+        */
+        preinit_flash_stats();
+    }
+
     flash_log.chip_size = chip_size;
     flash_log.match.xxF = chip_size - 1 * SPI_FLASH_SEC_SIZE;
     flash_log.match.xxE = chip_size - 2 * SPI_FLASH_SEC_SIZE;
     flash_log.match.xxD = chip_size - 3 * SPI_FLASH_SEC_SIZE;
     flash_log.match.xxC = chip_size - 4 * SPI_FLASH_SEC_SIZE;
     flash_log.match.xxB = chip_size - 5 * SPI_FLASH_SEC_SIZE;
+    flash_log.r_count.label = PSTR("%d = SPIRead (0x%08X, 0x%08X, %u)");
+    flash_log.w_count.label = PSTR("%d = SPIWrite(0x%08X, 0x%08X, %u)");
 }
 
 void ICACHE_RAM_ATTR flash_addr_match_stats(uint32_t addr, void *sd, uint32_t size, int err, bool write) {
@@ -156,11 +181,13 @@ void ICACHE_RAM_ATTR dbg_log_SPIRead(uint32_t addr, void *dest, size_t size, int
   flash_addr_match_stats(addr, dest, size, err, Read);
 }
 
-// #define ROM_SPIRead         0x40004b1cU
+#define ROM_SPIRead         0x40004b1cU
 #ifdef ROM_SPIRead
 typedef int (*fp_SPIRead_t)(uint32_t addr, void *dest, size_t size);
 constexpr fp_SPIRead_t real_SPIRead = (fp_SPIRead_t)ROM_SPIRead;
 
+// Linker seems to use weak over the PROVIDE directives.
+int ICACHE_RAM_ATTR SPIRead(uint32_t addr, void *dest, size_t size) __attribute__((weak));
 int ICACHE_RAM_ATTR SPIRead(uint32_t addr, void *dest, size_t size) {
   int err = real_SPIRead(addr, dest, size);
   dbg_log_SPIRead(addr, dest, size, err);

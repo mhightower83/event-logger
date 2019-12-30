@@ -211,8 +211,10 @@ bool IRAM_OPTION evlog_is_enable(void) {
 #ifdef EVLOG_CIRCULAR
 
 // uint32_t IRAM_OPTION evlog_event5(const char *fmt, uint32_t data0
-uint32_t IRAM_OPTION MK_NAME(evlog_event, EVLOG_TOTAL_ARGS)(const char *fmt, uint32_t data0
-
+uint32_t IRAM_OPTION MK_NAME(evlog_event, EVLOG_TOTAL_ARGS)(const char *fmt
+#if (EVLOG_TOTAL_ARGS > 1)
+      , uint32_t data0
+#endif
 #if (EVLOG_TOTAL_ARGS > 2)
       , uint32_t data1
 #endif
@@ -234,7 +236,9 @@ uint32_t IRAM_OPTION MK_NAME(evlog_event, EVLOG_TOTAL_ARGS)(const char *fmt, uin
       }
 
       p_evlog->event[num].fmt = fmt;
+#if (EVLOG_TOTAL_ARGS > 1)
       p_evlog->event[num].data[0] = data0;
+#endif
 #if (EVLOG_TOTAL_ARGS > 2)
       p_evlog->event[num].data[1] = data1;
 #endif
@@ -264,9 +268,11 @@ uint32_t IRAM_OPTION MK_NAME(evlog_event, EVLOG_TOTAL_ARGS)(const char *fmt, uin
 // Should look something like this when done
 //uint32_t IRAM_OPTION evlog_event5(const char *fmt, uint32_t data0, uint32_t data1, uint32_t data2, uint32_t data3)
 
-uint32_t IRAM_OPTION MK_NAME(evlog_event, EVLOG_TOTAL_ARGS)(const char *fmt, uint32_t data0
+uint32_t IRAM_OPTION MK_NAME(evlog_event, EVLOG_TOTAL_ARGS)(const char *fmt
 // uint32_t IRAM_OPTION evlog_event5(const char *fmt, uint32_t data0
-
+#if (EVLOG_TOTAL_ARGS > 1)
+      , uint32_t data0
+#endif
 #if (EVLOG_TOTAL_ARGS > 2)
       , uint32_t data1
 #endif
@@ -284,7 +290,9 @@ uint32_t IRAM_OPTION MK_NAME(evlog_event, EVLOG_TOTAL_ARGS)(const char *fmt, uin
         uint32_t num = p_evlog->num;
         if (num < MAX_EVENTS) {
             p_evlog->event[num].fmt = fmt;
+#if (EVLOG_TOTAL_ARGS > 1)
             p_evlog->event[num].data[0] = data0;
+#endif
 #if (EVLOG_TOTAL_ARGS > 2)
             p_evlog->event[num].data[1] = data1;
 #endif
@@ -431,7 +439,7 @@ void evlogPrintReport(Print& out, bool bLocalTime) {
         break;
 
     out.printf("  ");
-    if (isPstrFmt(event.fmt)) {
+
         (void)bLocalTime;
 #if (EVLOG_TIMESTAMP == EVLOG_TIMESTAMP_CLOCKCYCLES)
         uint32_t fraction = event.ts;
@@ -477,21 +485,26 @@ void evlogPrintReport(Print& out, bool bLocalTime) {
             out.print(F("--->>> "));
         }
 #endif
-        out.printf_P(event.fmt, event.data[0]
+
+    if (isPstrFmt(event.fmt)) {
+        out.printf_P(event.fmt
+#if (EVLOG_TOTAL_ARGS > 1)
+            , event.data[0]
+#endif
 #if (EVLOG_TOTAL_ARGS > 2)
-          , event.data[1]
+            , event.data[1]
 #endif
 #if (EVLOG_TOTAL_ARGS > 3)
-          , event.data[2]
+            , event.data[2]
 #endif
 #if (EVLOG_TOTAL_ARGS > 4)
-          , event.data[3]
+            , event.data[3]
 #endif
         );
     } else {
         out.printf_P(PSTR("< ? >, 0x%08X"), (uint32_t)event.fmt);
         for (size_t i=0; i<EVLOG_DATA_MAX ; i++)
-          out.printf(PSTR(", 0x%08X"), event.data[i]);
+            out.printf(PSTR(", 0x%08X"), event.data[i]);
     }
     out.println();
   }
