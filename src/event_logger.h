@@ -16,13 +16,13 @@
  //
  // A simple memory event logger. Logs a const string and 32 bit data value.
  //
-#ifndef EVENT_LOGGER_H
+// #ifdef EVLOG_ENABLE
+
+// #define EVLOG_ENABLE
+#if !defined(EVENT_LOGGER_H) && defined(EVLOG_ENABLE)
 #define EVENT_LOGGER_H
 
-#define ENABLE_EVLOG
 // #define EVLOG_CIRCULAR
-
-#ifdef ENABLE_EVLOG
 #define EVLOG_WITH_DRAM 1
 
 /*
@@ -174,7 +174,7 @@ void evlogPrintReport(Print& out, bool bLocalTime = false);
 #define EVLOG2(fmt, val0) EVLOG2_P(PSTR(fmt), (val0))
 #define EVLOG1(fmt) EVLOG1_P(PSTR(fmt))
 
-#else // ! ENABLE_EVLOG
+#else // ! EVLOG_ENABLE
 #ifndef evlog_init
 #define evlog_init(a) do{}while(false)
 #endif
@@ -192,39 +192,25 @@ void evlogPrintReport(Print& out, bool bLocalTime = false) {
 #endif
 #endif
 #ifndef EVLOG5
-#define EVLOG5_P(fmt, val0, val1, val2, val3) do{}while(false)
-#define EVLOG5(fmt, val0, val1, val2, val3) do{}while(false)
+#define EVLOG5_P(fmt, val0, val1, val2, val3) do{ (void)fmt; (void)val0; (void)val1; (void)val2; (void)val3; }while(false)
+#define EVLOG5 EVLOG5_P
 #endif
 #ifndef EVLOG4
-#define EVLOG4_P(fmt, val0, val1, val2) do{}while(false)
-#define EVLOG4(fmt, val0, val1, val2) do{}while(false)
+#define EVLOG4_P(fmt, val0, val1, val2) do{ (void)fmt; (void)val0; (void)val1; (void)val2; }while(false)
+#define EVLOG4 EVLOG4_P
 #endif
 #ifndef EVLOG3
-#define EVLOG3_P(fmt, val0, val1) do{}while(false)
-#define EVLOG3(fmt, val0, val1) do{}while(false)
+#define EVLOG3_P(fmt, val0, val1) do{ (void)fmt; (void)val0; (void)val1; }while(false)
+#define EVLOG3 EVLOG3_P
 #endif
 #ifndef EVLOG2
-#define EVLOG2_P(fmt, val) do{}while(false)
-#define EVLOG2(fmt, val) do{}while(false)
+#define EVLOG2_P(fmt, val0) do{ (void)fmt; (void)val0; }while(false)
+#define EVLOG2 EVLOG2_P
 #endif
 #ifndef EVLOG1
-#define EVLOG1_P(fmt) do{}while(false)
-#define EVLOG1(fmt) do{}while(false)
+#define EVLOG1_P(fmt) do{ (void)fmt; }while(false)
+#define EVLOG1 EVLOG1_P
 #endif
-#endif  // ENABLE_EVLOG
-
-// #ifndef EVLOG2
-// #define EVLOG2_P(fmt, val) _EVLOG2_P(fmt,val)
-// #define EVLOG2(fmt, val) _EVLOG2(fmt, val)
-// #endif
-// #ifndef EVLOG22
-// #define EVLOG22_P(fmt, val) _EVLOG2_P(fmt,val)
-// #define EVLOG22(fmt, val) _EVLOG2(fmt, val)
-// #endif
-// #ifndef EVLOG23
-// #define EVLOG23_P(fmt, val) _EVLOG2_P(fmt,val)
-// #define EVLOG23(fmt, val) _EVLOG2(fmt, val)
-// #endif
 
 
-#endif // EVENT_LOGGER_H
+#endif  // !defined(EVENT_LOGGER_H) && defined(EVLOG_ENABLE)

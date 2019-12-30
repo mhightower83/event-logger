@@ -77,7 +77,7 @@ void ICACHE_RAM_ATTR init_flash_stats(void) { //const char *init_by, bool write)
     flash_log.match.xxB = chip_size - 5 * SPI_FLASH_SEC_SIZE;
 }
 
-void ICACHE_RAM_ATTR flash_addr_match_stats(uint32_t addr, void *sd, uint32_t size, bool write, int err) {
+void ICACHE_RAM_ATTR flash_addr_match_stats(uint32_t addr, void *sd, uint32_t size, int err, bool write) {
     esp_flash_data_t *p_flash_count = (write) ? &flash_log.w_count : &flash_log.r_count;
     bool write_log = true; // write  // Change "true" to "write" to only EVLOG writes
     init_flash_stats();
@@ -111,6 +111,9 @@ void ICACHE_RAM_ATTR flash_addr_match_stats(uint32_t addr, void *sd, uint32_t si
             EVLOG5_P(p_flash_count->label, err, addr, sd, size);
         }
     }
+    if (0U == addr_sector) {
+        EVLOG5_P(p_flash_count->label, err, addr, sd, size);
+    }
 }
 
 
@@ -139,13 +142,7 @@ int ICACHE_RAM_ATTR SPIEraseBlock(uint32_t block) {
 }
 #endif
 
-
-// #define ROM_SPIRead         0x40004b1cU
-#ifdef ROM_SPIRead
-typedef int (*fp_SPIRead_t)(uint32_t addr, void *dest, size_t size);
-constexpr fp_SPIRead_t real_SPIRead = (fp_SPIRead_t)ROM_SPIRead;
-
-int ICACHE_RAM_ATTR SPIRead(uint32_t addr, void *dest, size_t size) {
+void ICACHE_RAM_ATTR dbg_log_SPIRead(uint32_t addr, void *dest, size_t size, int err) {
   if (spoof_init_data && size == 128) {
       if (flash_log.match.xxC == MK_SECTOR_ALIGN(addr)) {
         // We should never get here. This address/size case
@@ -156,10 +153,21 @@ int ICACHE_RAM_ATTR SPIRead(uint32_t addr, void *dest, size_t size) {
       }
   }
 
+  flash_addr_match_stats(addr, dest, size, err, Read);
+}
+
+// #define ROM_SPIRead         0x40004b1cU
+#ifdef ROM_SPIRead
+typedef int (*fp_SPIRead_t)(uint32_t addr, void *dest, size_t size);
+constexpr fp_SPIRead_t real_SPIRead = (fp_SPIRead_t)ROM_SPIRead;
+
+int ICACHE_RAM_ATTR SPIRead(uint32_t addr, void *dest, size_t size) {
   int err = real_SPIRead(addr, dest, size);
-  flash_addr_match_stats(addr, dest, size, Read, err);
+  dbg_log_SPIRead(addr, dest, size, err);
   return err;
 }
+#else
+
 #endif
 
 
@@ -170,7 +178,7 @@ constexpr fp_SPIWrite_t real_SPIWrite = (fp_SPIWrite_t)ROM_SPIWrite;
 
 int ICACHE_RAM_ATTR SPIWrite(uint32_t addr, void *src, size_t size) {
   int err = real_SPIWrite(addr, src, size);
-  flash_addr_match_stats(addr, src, size, Write, err);
+  flash_addr_match_stats(addr, src, size, err, Write);
   return err;
 }
 #endif

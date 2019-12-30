@@ -45,7 +45,7 @@
 #include <umm_malloc/umm_malloc_cfg.h>
 #include <evlog/src/event_logger.h>
 
-#ifdef ENABLE_EVLOG
+#ifdef EVENT_LOGGER_H //EVLOG_ENABLE
 
 extern "C" {
 // Need when used from ISR etc context. Comment out otherwise.
