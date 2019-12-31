@@ -490,6 +490,11 @@ void evlogPrintReport(Print& out, bool bLocalTime) {
 #endif
 
     if (isPstrFmt(event.fmt)) {
+        // TODO: Still getting into trouble with badly formated printf format
+        // string. Need more intense evaluation of the format string. Should
+        // validate that it only contains %d, %u, %p, %x and nutralize
+        // additional % values that exceed the supported argument count.
+        // Do not want printf to follow pointer values like with a %s.
         out.printf_P(event.fmt
 #if (EVLOG_TOTAL_ARGS > 1)
             , event.data[0]
