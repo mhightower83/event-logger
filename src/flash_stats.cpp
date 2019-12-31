@@ -168,6 +168,7 @@ int ICACHE_RAM_ATTR SPIEraseBlock(uint32_t block) {
 #endif
 
 void ICACHE_RAM_ATTR dbg_log_SPIRead(uint32_t addr, void *dest, size_t size, int err) {
+  flash_addr_match_stats(addr, dest, size, err, Read);
   if (spoof_init_data && size == 128) {
       if (flash_log.match.xxC == MK_SECTOR_ALIGN(addr)) {
         // We should never get here. This address/size case
@@ -177,8 +178,6 @@ void ICACHE_RAM_ATTR dbg_log_SPIRead(uint32_t addr, void *dest, size_t size, int
         EVLOG2("  *** Non phy_init_data sector, 0x%08X, read with spoof_init_data true", addr);
       }
   }
-
-  flash_addr_match_stats(addr, dest, size, err, Read);
 }
 
 #define ROM_SPIRead         0x40004b1cU

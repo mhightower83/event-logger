@@ -153,6 +153,9 @@ uint32_t IRAM_OPTION evlog_init(void) {
         clear_log();
         // A unique value to indicate log buffer was initialized
         p_evlog->cookie = k_cookie;
+        // Make things just work. For now always enable an inited log.
+        // evlog_preinit() can change it from there.
+        evlog_set_state(1U);
     }
     return dirty_value;
 }
@@ -380,7 +383,7 @@ bool evlog_get_event(evlog_entry_t *entry, bool first) {
 };
 
 #include "Print.h"
-#if 1
+#if 0
 extern "C" const char _irom0_pstr_start[];
 extern "C" const char _irom0_pstr_end[];
 constexpr const char *pstr_area_start = &_irom0_pstr_start[0];
@@ -440,50 +443,50 @@ void evlogPrintReport(Print& out, bool bLocalTime) {
 
     out.printf("  ");
 
-        (void)bLocalTime;
+    (void)bLocalTime;
 #if (EVLOG_TIMESTAMP == EVLOG_TIMESTAMP_CLOCKCYCLES)
-        uint32_t fraction = event.ts;
-        fraction /= clockCyclesPerMicrosecond();
-        time_t gtime = (time_t)(fraction / 1000000U);
-        fraction %= 1000000;
-        const char *ts_fmt = PSTR("%s.%06u: ");
-        struct tm *tv = gmtime(&gtime);
-        char buf[4];
-        // if (bLocalTime) not a real option  with a 57 sec resolution
-        if (strftime(buf, sizeof(buf), "%S", tv) > 0) {
-            out.printf_P(ts_fmt, buf, fraction);
-        } else {
-            out.print(F("--->>> "));
-        }
+    uint32_t fraction = event.ts;
+    fraction /= clockCyclesPerMicrosecond();
+    time_t gtime = (time_t)(fraction / 1000000U);
+    fraction %= 1000000;
+    const char *ts_fmt = PSTR("%s.%06u: ");
+    struct tm *tv = gmtime(&gtime);
+    char buf[4];
+    // if (bLocalTime) not a real option  with a 57 sec resolution
+    if (strftime(buf, sizeof(buf), "%S", tv) > 0) {
+        out.printf_P(ts_fmt, buf, fraction);
+    } else {
+        out.print(F("--->>> "));
+    }
 #elif (EVLOG_TIMESTAMP == EVLOG_TIMESTAMP_MICROS)
-        uint32_t fraction = event.ts;
-        time_t gtime = (time_t)(fraction / 1000000U);
-        fraction %= 1000000;
-        const char *ts_fmt = PSTR("%s.%06u: ");
-        // TODO: Factor this out of the loop, create an adjustment value
-        // Leave to a later date, this needs a lot more thought.
-        // if (bLocalTime) {
-        //   time_t real_gtime;
-        //   time(&real_gtime);
-        //   time_t up_time = (time_t)(micros() / 1000000U);
-        //   gtime += real_gtime - up_time; // Adjust
-        // }
-        // if (strftime(buf, sizeof(buf), "%T", localtime(&gtime)) > 0) {
+    uint32_t fraction = event.ts;
+    time_t gtime = (time_t)(fraction / 1000000U);
+    fraction %= 1000000;
+    const char *ts_fmt = PSTR("%s.%06u: ");
+    // TODO: Factor this out of the loop, create an adjustment value
+    // Leave to a later date, this needs a lot more thought.
+    // if (bLocalTime) {
+    //   time_t real_gtime;
+    //   time(&real_gtime);
+    //   time_t up_time = (time_t)(micros() / 1000000U);
+    //   gtime += real_gtime - up_time; // Adjust
+    // }
+    // if (strftime(buf, sizeof(buf), "%T", localtime(&gtime)) > 0) {
 #elif (EVLOG_TIMESTAMP == EVLOG_TIMESTAMP_MILLIS)
-        uint32_t fraction = event.ts;
-        time_t gtime = (time_t)(fraction / 1000U);
-        fraction %= 1000U;
-        const char *ts_fmt = PSTR("%s.%03u: ");
+    uint32_t fraction = event.ts;
+    time_t gtime = (time_t)(fraction / 1000U);
+    fraction %= 1000U;
+    const char *ts_fmt = PSTR("%s.%03u: ");
 #endif
 #if (EVLOG_TIMESTAMP == EVLOG_TIMESTAMP_MICROS) || \
     (EVLOG_TIMESTAMP == EVLOG_TIMESTAMP_MILLIS)
-        // struct tm *tv = gmtime(&gtime); //localtime(&gtime)
-        char buf[10];
-        if (strftime(buf, sizeof(buf), "%T", gmtime(&gtime)) > 0) {
-            out.printf_P(ts_fmt, buf, fraction);
-        } else {
-            out.print(F("--->>> "));
-        }
+    // struct tm *tv = gmtime(&gtime); //localtime(&gtime)
+    char buf[10];
+    if (strftime(buf, sizeof(buf), "%T", gmtime(&gtime)) > 0) {
+        out.printf_P(ts_fmt, buf, fraction);
+    } else {
+        out.print(F("--->>> "));
+    }
 #endif
 
     if (isPstrFmt(event.fmt)) {

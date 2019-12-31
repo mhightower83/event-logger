@@ -16,7 +16,7 @@
 #include <evlog/src/event_logger.h>
 #include <evlog/src/flash_stats.h>
 
-#if ENABLE_EVLOG_MAIN
+#if 0 //ENABLE_EVLOG_MAIN
 void enable_evlog_at_link_time(void)
 {
     /*
